@@ -1,3 +1,5 @@
+#include <string.h>
+#include "Mirf_nRF24L01.h"
 #include "Mirf.h"
 
 // Defines for setting the MiRF registers for transmitting or receiving mode

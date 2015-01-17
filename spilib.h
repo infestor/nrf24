@@ -6,6 +6,8 @@
 #ifndef __SPILIB_H__
 #define __SPILIB_H__
 
+#include <stdint.h>
+
 #define SPI_MODE0 0
 #define SPI_2XCLOCK_MASK 4
                      

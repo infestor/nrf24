@@ -6,9 +6,10 @@
 PROJECT = nrf_comm
 MCU = atmega328
 TARGET = nrf_comm.elf
-CC = avr-g++
+CESTA=/usr/local/CrossPack-AVR/bin/
+CC = $(CESTA)avr-c++
 
-CPP = avr-g++
+CPP = $(CESTA)avr-c++
 
 ## Options common to compile, link and assembly rules
 COMMON = -mmcu=$(MCU)
@@ -73,16 +74,16 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) $(LINKONLYOBJECTS) $(LIBDIRS) $(LIBS) -o $(TARGET)
 
 %.hex: $(TARGET)
-	avr-objcopy -O ihex $(HEX_FLASH_FLAGS)  $< $@
+	$(CESTA)avr-objcopy -O ihex $(HEX_FLASH_FLAGS)  $< $@
 
 %.eep: $(TARGET)
-	-avr-objcopy $(HEX_EEPROM_FLAGS) -O ihex $< $@ || exit 0
+	$(CESTA)avr-objcopy $(HEX_EEPROM_FLAGS) -O ihex $< $@ || exit 0
 
 %.lss: $(TARGET)
-	avr-objdump -h -S $< > $@
+	$(CESTA)avr-objdump -h -S $< > $@
 
 avr-size:
-	avr-size $(TARGET)
+	$(CESTA)avr-size $(TARGET)
 
 ## Clean target
 .PHONY: clean

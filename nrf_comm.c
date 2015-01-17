@@ -49,10 +49,10 @@ int main(void)
  setup();
 
  //nejak poslat PRESENTATION paket
+ ((payloadPresentationStruct *)(&outPacket.payload))->num_sensors = NUM_SENSOR; //this and the simmilar down could not be together due aliasing
  outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
  outPacket.rxAddr = 1;
  outPacket.type = (PACKET_TYPE)PRESENTATION;
- ((payloadPresentationStruct *)(&outPacket.payload))->num_sensors = NUM_SENSOR;
  ((payloadPresentationStruct *)(&outPacket.payload))->sensor_type[0] = ON_OFF_OUTPUT;
  Mirf.sendPacket(&outPacket);
 
