@@ -1,13 +1,19 @@
+#define __AVR_ATmega328__ 1
+#include <stdio.h>
+#include <avr/io.h>
+#include <string.h>
 #include "arduino_simple.h"
 
-void digitalWrite(uint8_t pin, uint8_t state)
+uint8_t volatile maska;
+uint8_t volatile *p;
+uint8_t volatile pinDef[2];
+
+void digitalWrite(uint8_t volatile pin, uint8_t volatile state)
 {
-  uint8_t maska;
-  volatile uint8_t *p;
+  memcpy((void*)&pinDef, pinMap[pin-1], 2);
+  maska = (1 << pinDef[1]);
   
-  maska = (1 << pinMap[pin-1][1]);
-  
-  switch (pinMap[pin-1][0]) {
+  switch (pinDef[0]) {
   case 1: //PORTB
     p = &PORTB;
     break;
@@ -18,7 +24,8 @@ void digitalWrite(uint8_t pin, uint8_t state)
     p = &PORTD;
     break;
   }
-  
+
+  if (p==0) return;
   if (state == HIGH) {
     *p = *p | maska;
   }
@@ -27,14 +34,12 @@ void digitalWrite(uint8_t pin, uint8_t state)
   }
 }
 
-uint8_t digitalRead(uint8_t pin)
+uint8_t digitalRead(uint8_t volatile pin)
 {
-  uint8_t maska;
-  volatile uint8_t *p;
+  memcpy((void*)&pinDef, pinMap[pin-1], 2);
+  maska = (1 << pinDef[1]); //pinMap[pin-1][1]);
   
-  maska = (1 << pinMap[pin-1][1]);
-  
-  switch (pinMap[pin-1][0]) {
+  switch (pinDef[0]) { //(pinMap[pin-1][0]) {
   case 1: //PORTB
     p = &PINB;
     break;
@@ -45,19 +50,18 @@ uint8_t digitalRead(uint8_t pin)
     p = &PIND;
     break;
   }
+  if (p==0) return(0);
   
   return (*p & maska);
 }
 
-void pinMode(uint8_t pin, uint8_t mode)
+void pinMode(uint8_t volatile pin, uint8_t volatile mode)
 {
   //create mask
-  uint8_t maska;
-  volatile uint8_t *p;
+  memcpy((void*)&pinDef, pinMap[pin-1], 2);
+  maska = (1 << pinDef[1]); //pinMap[pin-1][1]);
   
-  maska = (1 << pinMap[pin-1][1]);
-  
-  switch (pinMap[pin-1][0]) {
+  switch (pinDef[0]) { //(pinMap[pin-1][0]) {
   case 1: //DDRB
     p = &DDRB;
     break;
@@ -68,7 +72,8 @@ void pinMode(uint8_t pin, uint8_t mode)
     p = &DDRD;
     break;
   }
-  
+
+  if (p==0) return;
   if (mode == OUTPUT) {
     *p = *p | maska;
   }

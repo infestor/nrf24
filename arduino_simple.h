@@ -5,8 +5,7 @@
 #ifndef __ARDUINO_SIMPLE_H__
 #define __ARDUINO_SIMPLE_H__
 
-#include <avr/io.h>
-//#include <inttypes.h>
+//#include <avr/io.h>
 
 #define LOW 0
 #define HIGH 1
@@ -31,8 +30,8 @@ const uint8_t pinMap[][2] = {{3,3}, {3,4}, {9,9}, {9,9}, {9,9}, {9,9}, {1,6}, {1
 #define PIN_MISO 16
 #define PIN_SCK 17
 
-void digitalWrite(uint8_t pin, uint8_t state);
-void pinMode(uint8_t pin, uint8_t mode);
-uint8_t digitalRead(uint8_t pin);
+void digitalWrite(uint8_t volatile pin, uint8_t volatile state);
+void pinMode(uint8_t volatile pin, uint8_t volatile mode);
+uint8_t digitalRead(uint8_t volatile pin);
 
 #endif //__ARDUINO_SIMPLE_H__

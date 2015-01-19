@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 #include <avr/io.h>
+#include <stdlib.h>
+#include <avr/interrupt.h>
 #include "arduino_simple.h"
 #include "spilib.h"
 #include "packet_defs.h"
@@ -16,8 +18,8 @@ const uint16_t MULTICAST_ADDR = 0xffff;
 
 #define MAX_RX_PACKET_QUEUE 10
 #define MAX_TX_PACKET_QUEUE 10
-
-#define NOP __asm__("nop\n\t");
+#define MAX_TX_ATTEMPTS 3
+#define NOP_ASM __asm__("nop\n\t");
 
 //==========================================================================
 class Nrf24l {
@@ -37,6 +39,7 @@ class Nrf24l {
     uint8_t getCarrier();
 	uint8_t getStatus();
 
+	void removePacketfromTxQueue(void);
     void handleRxLoop(void);
     void handleTxLoop(void);
     void readPacket(mirfPacket* paket);
@@ -110,17 +113,21 @@ class Nrf24l {
 
     //-------------------------------------------------------------------------
     mirfPacket pendingPacket;
-    mirfPacket *outPacket;
-    mirfPacket ackPacket;
 
-    volatile mirfPacket *rxQueue[MAX_RX_PACKET_QUEUE];
-    volatile mirfPacket *txQueue[MAX_TX_PACKET_QUEUE];
-    volatile uint8_t txNum, rxNum;
+    mirfPacket volatile *rxQueue[MAX_RX_PACKET_QUEUE];
+    uint8_t volatile rxPosBeg;
+    uint8_t volatile rxPosEnd;
+
+    mirfPacket *txQueue[MAX_TX_PACKET_QUEUE];
+    uint8_t volatile txPosBeg;
+    uint8_t volatile txPosEnd;
+    uint8_t volatile txQueueSize;
+    uint8_t volatile txAttempt;
     
     // sign that there is received packet in buffer adressed to this device
 	// 0 means no packets
 	// 1..x means number of packets ready
-    volatile uint8_t inPacketReady;
+    uint8_t volatile inPacketReady;
     
     // sign that there is sending in progress
     //0 means - no packet to be sent (ready)
@@ -128,20 +135,20 @@ class Nrf24l {
     //2 means unsent - waiting for free air
     //3 means packet sent, but waiting for ACK
     //4 means timeout
-    volatile uint8_t sendingStatus;
+    uint8_t volatile sendingStatus;
     
     //incremented with every new sent packet (used for identification of ACKs)
-    volatile uint8_t packetCounter;
+    uint8_t packetCounter;
     
     //increments with every call of periodic Rx and Tx handle loop functions
     //dedicated to recognize timeouts in waiting for ACK
     //and to measure random time between send attempts
-    volatile uint8_t Timer;
-    volatile uint8_t TimerDelayed;    
-    volatile uint8_t ackTimeout; //timer state when timeout will occur
+    uint8_t Timer;
+    uint8_t volatile TimerNewAttempt;
+    uint8_t volatile ackTimeoutTimer; //timer state when timeout will occur
     
     //whether there is to be sent some ack
-    volatile bool sendAck;
+    //volatile bool sendAck;
     
 };
 

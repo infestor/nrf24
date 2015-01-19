@@ -16,7 +16,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O0 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 
 ## Assembly specific flags
@@ -51,7 +51,7 @@ OBJECTS = nrf_comm.o arduino_simple.o Mirf.o spilib.o
 LINKONLYOBJECTS = 
 
 ## Build
-all: touch $(TARGET) nrf_comm.hex nrf_comm.eep nrf_comm.lss avr-size
+all: clean touch $(TARGET) nrf_comm.hex nrf_comm.eep nrf_comm.lss avr-size
 	
 touch:	
 	touch ../nrf_comm.c
@@ -83,7 +83,7 @@ $(TARGET): $(OBJECTS)
 	$(CESTA)avr-objdump -h -S $< > $@
 
 avr-size:
-	$(CESTA)avr-size $(TARGET)
+	$(CESTA)avr-size --mcu=atmega328 --format=avr $(TARGET)
 
 ## Clean target
 .PHONY: clean

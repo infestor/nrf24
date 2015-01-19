@@ -22,8 +22,6 @@ public:
   void end(void);
   void setDataMode(uint8_t);
   void setClockDivider(uint8_t);
-
-
 };
 
 extern SPIlib SPI;
