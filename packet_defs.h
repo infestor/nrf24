@@ -1,13 +1,5 @@
 typedef struct {
-  uint16_t txAddr;
-  uint16_t rxAddr;
-  uint8_t  type;
-  uint8_t  counter;
-  uint8_t  payload[10];
-} mirfPacket;
-
-typedef struct {
-  uint16_t addr;
+  uint8_t addr;
   uint8_t  counter;
 } ackRecord;
 

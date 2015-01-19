@@ -14,12 +14,22 @@
 
 #define mirf_ADDR_LEN	5
 const char mirf_ADDR[] = "honza";
-const uint16_t MULTICAST_ADDR = 0xffff;
+#define ADDR_TYPE uint8_t
+const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
 
 #define MAX_RX_PACKET_QUEUE 10
-#define MAX_TX_PACKET_QUEUE 10
+#define MAX_TX_PACKET_QUEUE 5
+#define MAX_ACK_PACKET_QUEUE 6
 #define MAX_TX_ATTEMPTS 3
 #define NOP_ASM __asm__("nop\n\t");
+
+typedef struct {
+  ADDR_TYPE txAddr;
+  ADDR_TYPE rxAddr;
+  uint8_t  type;
+  uint8_t  counter;
+  uint8_t  payload[10];
+} mirfPacket;
 
 //==========================================================================
 class Nrf24l {
@@ -30,7 +40,7 @@ class Nrf24l {
 	void config();
 	//void send(uint8_t *value);
 	void setADDR(void);
-    void setDevAddr(uint16_t);
+    void setDevAddr(ADDR_TYPE);
 	bool dataReady();
 	bool isSending();
 	bool rxFifoEmpty();
@@ -40,12 +50,15 @@ class Nrf24l {
 	uint8_t getStatus();
 
 	void removePacketfromTxQueue(void);
+	void removePacketfromAckQueue(void);
+
     void handleRxLoop(void);
     void handleTxLoop(void);
     void readPacket(mirfPacket* paket);
     uint8_t sendPacket(mirfPacket* paket);
     void createAck(mirfPacket* paket);
-		
+
+    void maintenanceLoop(void);
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 	void configRegister(uint8_t reg, uint8_t value);
 	void readRegister(uint8_t reg, uint8_t * value, uint8_t len);
@@ -103,7 +116,7 @@ class Nrf24l {
     	//address of device
     	//unique for every node
     	//1 for master node
-    	uint16_t devAddr;
+		ADDR_TYPE devAddr;
 
 		/**
 		 * Spi interface (must extend spi).
@@ -123,6 +136,11 @@ class Nrf24l {
     uint8_t volatile txPosEnd;
     uint8_t volatile txQueueSize;
     uint8_t volatile txAttempt;
+
+    mirfPacket *ackQueue[MAX_ACK_PACKET_QUEUE];
+    uint8_t volatile ackPosBeg;
+    uint8_t volatile ackPosEnd;
+    uint8_t volatile ackQueueSize;
     
     // sign that there is received packet in buffer adressed to this device
 	// 0 means no packets

@@ -8,12 +8,25 @@
 
 Nrf24l Mirf = Nrf24l();
 
-void Nrf24l::removePacketfromTxQueue(void)
+ inline void Nrf24l::removePacketfromTxQueue(void)
 {
     free((void *)txQueue[txPosBeg]);  //free the packet from queue
     txQueueSize--;
     txPosBeg++;
     if (txPosBeg == MAX_TX_PACKET_QUEUE) txPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
+}
+
+inline void Nrf24l::removePacketfromAckQueue(void)
+{
+    free((void *)ackQueue[ackPosBeg]);  //free the packet from queue
+    ackQueueSize--;
+    ackPosBeg++;
+    if (ackPosBeg == MAX_ACK_PACKET_QUEUE) ackPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
+}
+
+void Nrf24l::maintenanceLoop(void)
+{
+  //if (rem)
 }
 
 //should be run within some timered loop (really often - 50ms)
@@ -33,7 +46,7 @@ void Nrf24l::handleRxLoop(void)
         if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
         {
           //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
-          if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (packetCounter == pendingPacket.counter) )
+          if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (packetCounter == pendingPacket.counter) ) //ack for sent packet received
           {
             sendingStatus = 0;
             removePacketfromTxQueue();
@@ -49,8 +62,8 @@ void Nrf24l::handleRxLoop(void)
           rxPosEnd++;
           if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
           rxQueue[rxPosEnd] = newPacket;
-          newPacket = NULL;
           createAck(newPacket);
+          newPacket = NULL;
         }
       }
       
@@ -76,7 +89,15 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
       {
 	    ceLow();
         flushTx();  
-        //write packet to fifo
+
+        //if there is some ack waiting
+        if (ackQueueSize > 0)
+        {
+        	nrfSpiWrite(W_TX_PAYLOAD, (uint8_t*)&ackQueue[ackPosBeg], false, payload);
+        	removePacketfromAckQueue();
+        }
+
+        //write user packet to fifo
         nrfSpiWrite(W_TX_PAYLOAD, (uint8_t*)&txQueue[txPosBeg], false, payload);
         //we will left the packet in the queue array until timeout occures or ack is received
 
@@ -185,10 +206,10 @@ void Nrf24l::createAck(mirfPacket* paket)
   ackPacket->counter = paket->counter;
   ackPacket->type = ACK;
 
-  txQueueSize++;
-  txPosEnd++;
-  if (txPosEnd == MAX_TX_PACKET_QUEUE) txPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-  txQueue[txPosEnd] = ackPacket;
+  ackQueueSize++;
+  ackPosEnd++;
+  if (ackPosEnd == MAX_ACK_PACKET_QUEUE) ackPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
+  ackQueue[ackPosEnd] = ackPacket;
   ackPacket = NULL;
   
   //sendAck = true;
@@ -246,7 +267,7 @@ void Nrf24l::config()
 	flushRx();
 }
 
-void Nrf24l::setDevAddr(uint16_t addr)
+void Nrf24l::setDevAddr(ADDR_TYPE addr)
 // sets the unique node address
 // is used during decoding of incoming packets (only packets for this address are handled)
 // when transmitting packet, this address is used as SENDER adress
