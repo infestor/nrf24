@@ -10,7 +10,6 @@ Nrf24l Mirf = Nrf24l();
 
  inline void Nrf24l::removePacketfromTxQueue(void)
 {
-    free((void *)txQueue[txPosBeg]);  //free the packet from queue
     txQueueSize--;
     txPosBeg++;
     if (txPosBeg == MAX_TX_PACKET_QUEUE) txPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -18,7 +17,6 @@ Nrf24l Mirf = Nrf24l();
 
 inline void Nrf24l::removePacketfromAckQueue(void)
 {
-    free((void *)ackQueue[ackPosBeg]);  //free the packet from queue
     ackQueueSize--;
     ackPosBeg++;
     if (ackPosBeg == MAX_ACK_PACKET_QUEUE) ackPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -46,7 +44,7 @@ void Nrf24l::handleRxLoop(void)
         if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
         {
           //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
-          if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (packetCounter == pendingPacket.counter) ) //ack for sent packet received
+          if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) ) //ack for sent packet received
           {
             sendingStatus = 0;
             removePacketfromTxQueue();
@@ -55,15 +53,11 @@ void Nrf24l::handleRxLoop(void)
         }
         else 
         { //other packets are saved to queue and app has to hadle them
-          mirfPacket *newPacket;
-          newPacket = (mirfPacket *)malloc(payload);
-          memcpy(newPacket, &pendingPacket, payload);
+          memcpy((void*)&rxQueue[rxPosEnd], &pendingPacket, payload);
           inPacketReady++;
           rxPosEnd++;
           if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-          rxQueue[rxPosEnd] = newPacket;
-          createAck(newPacket);
-          newPacket = NULL;
+          createAck(&pendingPacket);
         }
       }
       
@@ -79,7 +73,6 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 {
 
     //bool onlyAck = (sendAck && (sendingStatus==0)
-	//TODO: separate normal and ack packets. Now the queue in tx handle function does not work properly
 
 	//this is for sending user packet
 	if ( (sendingStatus == IN_FIFO) || ((sendingStatus == WAIT_FREE_AIR) && (Timer == TimerNewAttempt)) ) //new packet in fifo waiting to be sent
@@ -141,8 +134,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 	//we have to temporarily disable timer0 interrupt because no one else could be able to touch
 	//the packet queue until we are finished
 	cli();
-    memcpy(paket, (const void*)rxQueue[rxPosBeg], payload);
-    free((void*)rxQueue[rxPosBeg]);  //free the packet from queue
+    memcpy(paket, (const void*)&rxQueue[rxPosBeg], payload);
     inPacketReady--;
     rxPosBeg++;
     if (rxPosBeg == MAX_RX_PACKET_QUEUE) rxPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -165,16 +157,12 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  mirfPacket *newPacket;
-  newPacket = (mirfPacket*)malloc(payload);
-  if (newPacket == NULL) {return 98;}
-  memcpy(newPacket, paket, payload);
-
   cli();
+  memcpy((void*)&txQueue[txPosEnd], paket, payload);
+
   txQueueSize++;
   txPosEnd++;
   if (txPosEnd == MAX_TX_PACKET_QUEUE) txPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-  txQueue[txPosEnd] = newPacket; //save pointer to packet
   sendingStatus = 1; //set sign that there is sending packet pending
   txAttempt = 1;
   sei();
@@ -194,24 +182,14 @@ void Nrf24l::createAck(mirfPacket* paket)
   if (txQueueSize == MAX_TX_PACKET_QUEUE) return;
 
   //cli();
-  mirfPacket *ackPacket;
-  ackPacket = (mirfPacket*)malloc(payload);
-  if (ackPacket == NULL) {
-	  //sei();
-	  return;
-  }
-
-  ackPacket->txAddr = paket->rxAddr;
-  ackPacket->rxAddr = paket->txAddr;
-  ackPacket->counter = paket->counter;
-  ackPacket->type = ACK;
+  ackQueue[ackPosEnd].txAddr = paket->rxAddr;
+  ackQueue[ackPosEnd].rxAddr = paket->txAddr;
+  ackQueue[ackPosEnd].counter = paket->counter;
+  ackQueue[ackPosEnd].type = ACK;
 
   ackQueueSize++;
   ackPosEnd++;
   if (ackPosEnd == MAX_ACK_PACKET_QUEUE) ackPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-  ackQueue[ackPosEnd] = ackPacket;
-  ackPacket = NULL;
-  
   //sendAck = true;
   //sei();
 }
@@ -222,8 +200,8 @@ void Nrf24l::createAck(mirfPacket* paket)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 Nrf24l::Nrf24l() {
-	cePin = 8;
-	csnPin = 7;
+	cePin = 12;
+	csnPin = 11;
 	channel = 70;
     payload = sizeof(mirfPacket);
 	spi = &SPI;

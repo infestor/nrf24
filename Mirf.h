@@ -26,6 +26,7 @@ const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
 typedef struct {
   ADDR_TYPE txAddr;
   ADDR_TYPE rxAddr;
+  ADDR_TYPE origAddr;
   uint8_t  type;
   uint8_t  counter;
   uint8_t  payload[10];
@@ -127,17 +128,17 @@ class Nrf24l {
     //-------------------------------------------------------------------------
     mirfPacket pendingPacket;
 
-    mirfPacket volatile *rxQueue[MAX_RX_PACKET_QUEUE];
+    mirfPacket volatile rxQueue[MAX_RX_PACKET_QUEUE];
     uint8_t volatile rxPosBeg;
     uint8_t volatile rxPosEnd;
 
-    mirfPacket *txQueue[MAX_TX_PACKET_QUEUE];
+    mirfPacket volatile txQueue[MAX_TX_PACKET_QUEUE];
     uint8_t volatile txPosBeg;
     uint8_t volatile txPosEnd;
     uint8_t volatile txQueueSize;
     uint8_t volatile txAttempt;
 
-    mirfPacket *ackQueue[MAX_ACK_PACKET_QUEUE];
+    mirfPacket volatile ackQueue[MAX_ACK_PACKET_QUEUE];
     uint8_t volatile ackPosBeg;
     uint8_t volatile ackPosEnd;
     uint8_t volatile ackQueueSize;

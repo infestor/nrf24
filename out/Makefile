@@ -4,7 +4,7 @@
 
 ## General Flags
 PROJECT = nrf_comm
-MCU = atmega328
+MCU = atmega328p
 TARGET = nrf_comm.elf
 CESTA=/usr/local/CrossPack-AVR/bin/
 CC = $(CESTA)avr-c++
@@ -51,7 +51,7 @@ OBJECTS = nrf_comm.o arduino_simple.o Mirf.o spilib.o
 LINKONLYOBJECTS = 
 
 ## Build
-all: clean touch $(TARGET) nrf_comm.hex nrf_comm.eep nrf_comm.lss avr-size
+all: clean $(TARGET) nrf_comm.hex nrf_comm.eep nrf_comm.lss avr-size
 	
 touch:	
 	touch ../nrf_comm.c
@@ -83,7 +83,7 @@ $(TARGET): $(OBJECTS)
 	$(CESTA)avr-objdump -h -S $< > $@
 
 avr-size:
-	$(CESTA)avr-size --mcu=atmega328 --format=avr $(TARGET)
+	$(CESTA)avr-size --mcu=$(MCU) --format=avr $(TARGET)
 
 ## Clean target
 .PHONY: clean

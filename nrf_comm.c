@@ -1,14 +1,17 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h> 
+#include <avr/sleep.h>
 #include "Mirf.h"
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
+uint16_t volatile adcVal;
 
 #define DEV_ADDR 2
 #define NUM_SENSOR 1
+#define SWITCHED_PIN 9
 
 //======================================================
 ISR(TIMER0_COMPA_vect) {
@@ -18,6 +21,22 @@ ISR(TIMER0_COMPA_vect) {
 
 ISR(BADISR_vect) { //just for case
   __asm__("nop\n\t");
+}
+
+ISR(ADC_vect) {
+	SMCR = 0; //disable sleep and set Idle mode
+}
+
+void getAdcVal(void)
+{
+	  SMCR = 2; //enable ADC noise reduct sleep mode
+
+	  ADCSRA |= _BV(ADSC);  // Start the ADC
+	  sleep_enable();
+	  sleep_cpu();
+
+	  // Reading register "ADCW" takes care of how to read ADCL and ADCH.
+	  adcVal = ADCW;
 }
 
 void setup()
@@ -34,10 +53,17 @@ void setup()
   TCCR0B = 5;
   TIMSK0 = 2;
 
+  //set ADC to read temp from internal sensor, 1.1V reference, prescaler 128
+  ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3));
+  ADCSRA |= (_BV(ADEN) | _BV(ADIE) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0) );  // enable the ADC
+
   //led13 as output
-  pinMode(13, OUTPUT);
+  pinMode(SWITCHED_PIN, OUTPUT);
   pinState = HIGH;
-  digitalWrite(13, pinState);
+  digitalWrite(SWITCHED_PIN, pinState);
+
+  //disable unused peripherials
+  PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) ) ;
   
   sei();
 }
@@ -55,9 +81,8 @@ int main(void)
  ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = NUM_SENSOR;
  ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = ON_OFF_OUTPUT;
 
-
  //send the presentation packet. Try it until ACK is received
- while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
+ //while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
 
 
  while(1) {
@@ -73,7 +98,7 @@ int main(void)
 		  if (req->cmd == WRITE)
 		  {
 		     if (req->payload[0] > 0) pinState = HIGH; else pinState = LOW;
-			 digitalWrite(13, pinState);
+			 digitalWrite(SWITCHED_PIN, pinState);
 		  }
 		  else if (req->cmd == READ)
 		  {
@@ -88,6 +113,12 @@ int main(void)
 		  }
         }
 	 }
+   }
+   else //if there is no packet to be processed, we can enter idle mode to save some power
+   {
+	  sleep_enable();
+	  sleep_cpu();
+	  sleep_disable();
    }
  }
 
