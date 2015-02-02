@@ -8,9 +8,10 @@ mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
 uint16_t volatile adcVal;
+uint8_t sendResult;
 
 #define DEV_ADDR 2
-#define NUM_SENSOR 1
+#define NUM_SENSORS 2
 #define SWITCHED_PIN 9
 
 //======================================================
@@ -24,7 +25,7 @@ ISR(BADISR_vect) { //just for case
 }
 
 ISR(ADC_vect) {
-	SMCR = 0; //disable sleep and set Idle mode
+	SMCR = 0; //disable sleep and enable normal Idle mode
 }
 
 void getAdcVal(void)
@@ -78,8 +79,9 @@ int main(void)
  outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
  outPacket.rxAddr = 1;
  outPacket.type = (PACKET_TYPE)PRESENTATION;
- ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = NUM_SENSOR;
- ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = ON_OFF_OUTPUT;
+ ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = 2;
+ ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = TEMP;
+ ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[1] = ON_OFF_OUTPUT;
 
  //send the presentation packet. Try it until ACK is received
  //while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
@@ -93,7 +95,19 @@ int main(void)
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
 	 {
 	    payloadRequestStruct *req = (payloadRequestStruct*)&inPacket.payload;
-		if (req->for_sensor == NUM_SENSOR)
+		outPacket.type = RESPONSE;
+		outPacket.rxAddr = inPacket.txAddr;
+		payloadResponseStruct *res = (payloadResponseStruct*)&outPacket.payload;
+
+	    if (req->for_sensor == 0) //temp sensor
+		{
+			 res->cmd = req->cmd;
+			 res->len = 2;
+			 res->from_sensor = req->for_sensor;
+			 res->payload[0] = pinState;
+			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
+		}
+		else if (req->for_sensor == 1) //door switch
 		{  
 		  if (req->cmd == WRITE)
 		  {
@@ -102,14 +116,11 @@ int main(void)
 		  }
 		  else if (req->cmd == READ)
 		  {
-		     outPacket.type = RESPONSE;
-		     outPacket.rxAddr = inPacket.txAddr;
-			 payloadResponseStruct *res = (payloadResponseStruct*)&outPacket.payload;
 			 res->cmd = req->cmd;
 			 res->len = 1;
 			 res->from_sensor = req->for_sensor;
 			 res->payload[0] = pinState;
-			 Mirf.sendPacket((mirfPacket*)&outPacket);
+			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
 		  }
         }
 	 }

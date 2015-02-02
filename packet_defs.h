@@ -28,6 +28,7 @@ typedef enum {
   TEMP = 1,
   DOOR_SWITCH = 2
 } SENSOR_TYPE;
+
 //payload related structures
 
 typedef enum {

@@ -18,6 +18,12 @@
 #define PIN_MISO 16
 #define PIN_SCK 17
 
+#define D9  13
+#define D10 14
+#define D11 15
+#define D12 16
+#define D13 17
+
 void digitalWrite(uint8_t volatile pin, uint8_t volatile state);
 void pinMode(uint8_t volatile pin, uint8_t volatile mode);
 uint8_t digitalRead(uint8_t volatile pin);

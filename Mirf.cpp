@@ -27,7 +27,8 @@ void Nrf24l::maintenanceLoop(void)
   //if (rem)
 }
 
-//should be run within some timered loop (really often - 50ms)
+
+//should be run within some timered loop (really often - 10ms)
 void Nrf24l::handleRxLoop(void)
 {   
   Timer++; //every time we must increment timer
@@ -44,11 +45,14 @@ void Nrf24l::handleRxLoop(void)
         if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
         {
           //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
+        	//
           if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) ) //ack for sent packet received
           {
             sendingStatus = 0;
             removePacketfromTxQueue();
             //remove sent packet from queue
+            //and add confirmation to confirmed queue
+            //addConfirmedPacket(pendingPacket.counter);
           }
         }
         else 
@@ -71,47 +75,62 @@ void Nrf24l::handleRxLoop(void)
 
 void Nrf24l::handleTxLoop(void) //probably should be run from main program loop, because can be time consuming in wait for finished tx
 {
+	uint8_t *pPaket;
+	uint8_t whatToSend = 0; //0 = nothing, 1 = ack, 2 = user packet
 
     //bool onlyAck = (sendAck && (sendingStatus==0)
+    //if there is some ack waiting
+    if (ackQueueSize > 0)
+    {
+    	pPaket = (uint8_t *)&ackQueue[ackPosBeg];
+    	whatToSend = 1;
+    }
+    else if ( (sendingStatus == IN_FIFO) || ((sendingStatus == WAIT_FREE_AIR) && (Timer == TimerNewAttempt)) ) //new packet in fifo waiting to be sent
+    {
+    	pPaket = (uint8_t *)&txQueue[txPosBeg];
+    	whatToSend = 2;
+    }
 
 	//this is for sending user packet
-	if ( (sendingStatus == IN_FIFO) || ((sendingStatus == WAIT_FREE_AIR) && (Timer == TimerNewAttempt)) ) //new packet in fifo waiting to be sent
+	if ( whatToSend > 0 ) //new packet in fifo waiting to be sent
     {
 
       if ( !getCarrier() ) //no carrier detected (free air/free to send)
       {
-	    ceLow();
+        powerUpTx();       // Set to transmitter mode , Power up
         flushTx();  
 
-        //if there is some ack waiting
-        if (ackQueueSize > 0)
-        {
-        	nrfSpiWrite(W_TX_PAYLOAD, (uint8_t*)&ackQueue[ackPosBeg], false, payload);
-        	removePacketfromAckQueue();
-        }
-
         //write user packet to fifo
-        nrfSpiWrite(W_TX_PAYLOAD, (uint8_t*)&txQueue[txPosBeg], false, payload);
+        nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, payload);
         //we will left the packet in the queue array until timeout occures or ack is received
 
-        powerUpTx();       // Set to transmitter mode , Power up
       	ceHi();                     // Start transmission
-      	//ceLow(); //when 2 or more packets, we have to wait until fifo is empty (while isSending() )
-        while ( isSending() ) NOP_ASM //wait for end of transfer and immediately start RX mode
-        sendingStatus = WAIT_ACK;
-        //sendAck = false;
-        ackTimeoutTimer = Timer + 10;
+
+      	if ( whatToSend == 1) //remove packet if it was ack
+      	{
+      		removePacketfromAckQueue();
+      	}
+      	else {
+      		sendingStatus = WAIT_ACK;
+      		ackTimeoutTimer = Timer + MAX_ACK_WAIT_TIME;
+      	}
+
+      	powerUpRx(); //ceLow(); //when 2 or more packets, we have to wait until fifo is empty (while isSending() )
+        //while ( isSending() ) NOP_ASM //wait for end of transfer and immediately start RX mode
       }
       else  //there is someone already transmitting, wait random time to next try
       {
-        txAttempt++;
-        sendingStatus = WAIT_FREE_AIR;        
-        TimerNewAttempt = Timer + 1 + (Timer & 252); //little bit randomize (increment also with lowest 2 bits of timer)
+    	if (whatToSend == 2)
+    	{
+    		txAttempt++;
+    		sendingStatus = WAIT_FREE_AIR;
+    		TimerNewAttempt = Timer + 1 + (Timer & 252); //little bit randomize (increment also with lowest 2 bits of timer)
+    	}
       }
     }
 
 	//only finite number of attempts to send (when air is full)
-    if (txAttempt == 4) {
+    if (txAttempt == MAX_TX_ATTEMPTS) {
         sendingStatus = TIMEOUT;
         removePacketfromTxQueue();
     }
@@ -147,17 +166,18 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   //another sending in progress, busy -> fail
   if ( (sendingStatus > 0) || (isSending() )  )
   {
-     return 99;
+     return 0;
   }
 
-  if (txQueueSize == MAX_TX_PACKET_QUEUE) return 98;
+  if (txQueueSize == MAX_TX_PACKET_QUEUE) return 0;
 
   //set all parameters in packet
+  cli();
   packetCounter++;
+  if (packetCounter == 0) packetCounter++; //counter cannot be 0
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  cli();
   memcpy((void*)&txQueue[txPosEnd], paket, payload);
 
   txQueueSize++;
@@ -167,14 +187,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   txAttempt = 1;
   sei();
   
-  while ( !( ((SENDING_STATUS)sendingStatus == READY) || ((SENDING_STATUS)sendingStatus == TIMEOUT)) ) //success or timeout
-  {
-    NOP_ASM
-  } 
-  
-  uint8_t stat = sendingStatus;
-  sendingStatus = 0; //we must reset status to ready(in case that it was TIMEOUT), to be able work out next packets
-  return stat;
+  return packetCounter;
 }
 
 void Nrf24l::createAck(mirfPacket* paket)
@@ -200,8 +213,8 @@ void Nrf24l::createAck(mirfPacket* paket)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 Nrf24l::Nrf24l() {
-	cePin = 12;
-	csnPin = 11;
+	cePin = D9;
+	csnPin = D10;
 	channel = 70;
     payload = sizeof(mirfPacket);
 	spi = &SPI;
@@ -233,16 +246,17 @@ void Nrf24l::config()
   configRegister(SETUP_AW, 3); //hw address width - 5bytes
   configRegister(SETUP_RETR, 0); //auto retransmission off
 	configRegister(RF_CH, channel);  // Set RF channel
-  configRegister(RF_SETUP,  7 );  //1mbit, 0dbm, max gain
+  configRegister(RF_SETUP,  0b00100111 );  //250kbit, 0dbm, max gain
   configRegister(FEATURE, 0); //dynamic length disabled(1<<EN_DPL) )
+  configRegister(DYNPD, 0);
 	// Set length of incoming payload 
 	configRegister(RX_PW_P0, payload);
 	configRegister(RX_PW_P1, payload);
   setADDR();
   
 	// Start receiver 
-	powerUpRx();
 	flushRx();
+	powerUpRx();
 }
 
 void Nrf24l::setDevAddr(ADDR_TYPE addr)
@@ -398,6 +412,7 @@ void Nrf24l::flushRx(){
 
 void Nrf24l::powerUpTx() {
 	PTX = 1;
+	ceLow();
 	configRegister(CONFIG, baseConfig | (_BV(PWR_UP) & ~_BV(PRIM_RX)) );
 }
 
@@ -444,6 +459,85 @@ void Nrf24l::powerDown(){
 	flushRx();
 	flushTx();
 }
+
+//inline void Nrf24l::addConfirmedPacket(uint8_t counter)
+//{
+// if (confirmedStackSize < MAX_TX_PACKET_QUEUE)
+// {
+//	 confirmedPackets[confirmedStackSize] = counter;
+//	 confirmedStackSize++;
+// }
+// else
+// {
+//	 return;
+// }
+//}
+//
+//inline uint8_t Nrf24l::isPacketConfirmed(uint8_t counter)
+//{
+//	cli();
+//	if (confirmedStackSize == 0) {sei(); return 0; } //empty queue
+//
+//	for (uint8_t i=0; i < confirmedStackSize; i++)
+//	{
+//		if (confirmedPackets[i] == counter)
+//		{
+//			removePacketFromConfirmed(i);
+//			sei();
+//			return 1; //packet found
+//		}
+//	}
+//
+//	sei();
+//	return 0; //packet not found
+//}
+//
+//void Nrf24l::removePacketFromConfirmed(uint8_t index)
+//{
+//	if (confirmedStackSize > 1)
+//	{
+//		if (index == (confirmedStackSize-1))
+//		{
+//			confirmedStackSize--;
+//			return;
+//		}
+//
+//		for (uint8_t i = index; i < (confirmedStackSize-1); i++)
+//		{
+//			confirmedPackets[i] = confirmedPackets[i+1];
+//
+//		}
+//		confirmedStackSize--;
+//	}
+//	else
+//	{
+//		confirmedStackSize = 0;
+//	}
+//}
+
+//inline uint8_t Nrf24l::isPacketInTxQueue(uint8_t counter)
+//{
+//	//because probably most of the time, there will be only one packet pending
+//	//this could little speed thhings up
+//	if(txQueue[txPosBeg].counter == counter)
+//	{
+//		return 1;
+//	}
+//	else
+//	{
+//		uint8_t x;
+//		uint8_t i = txPosBeg;
+//
+//		for (x = 1; x < txQueueSize; x++)
+//		{
+//			i++;
+//			if (i == MAX_TX_PACKET_QUEUE) i = 0;
+//			if (txQueue[i].counter == counter) return 1;
+//		}
+//	}
+//
+//	return 0;
+//}
 
 // void Nrf24l::send(uint8_t * value) 
 // // Sends a data package to the default address. Be sure to send the correct

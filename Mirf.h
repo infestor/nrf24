@@ -18,15 +18,16 @@ const char mirf_ADDR[] = "honza";
 const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
 
 #define MAX_RX_PACKET_QUEUE 10
-#define MAX_TX_PACKET_QUEUE 5
+#define MAX_TX_PACKET_QUEUE 1
 #define MAX_ACK_PACKET_QUEUE 6
-#define MAX_TX_ATTEMPTS 3
+#define MAX_TX_ATTEMPTS 4
+#define MAX_ACK_WAIT_TIME 5
 #define NOP_ASM __asm__("nop\n\t");
 
 typedef struct {
   ADDR_TYPE txAddr;
   ADDR_TYPE rxAddr;
-  ADDR_TYPE origAddr;
+  //ADDR_TYPE origAddr;
   uint8_t  type;
   uint8_t  counter;
   uint8_t  payload[10];
@@ -53,6 +54,13 @@ class Nrf24l {
 	void removePacketfromTxQueue(void);
 	void removePacketfromAckQueue(void);
 
+	//void addConfirmedPacket(uint8_t counter);
+	//uint8_t isPacketConfirmed(uint8_t counter);
+	//void removePacketFromConfirmed(uint8_t index);
+
+	//uint8_t isPacketInTxQueue(uint8_t counter);
+
+	//void packetSent(void);
     void handleRxLoop(void);
     void handleTxLoop(void);
     void readPacket(mirfPacket* paket);
@@ -86,12 +94,12 @@ class Nrf24l {
 		volatile uint8_t PTX;
 
 		/**
-		 * CE Pin controls RX / TX, default 8.
+		 * CE Pin controls RX / TX, default D9.
 		 */
 		uint8_t cePin;
 
 		/**
-		 * CSN Pin Chip Select Not, default 7.
+		 * CSN Pin Chip Select Not, default D10.
 		 */
 		uint8_t csnPin;
 
@@ -142,7 +150,10 @@ class Nrf24l {
     uint8_t volatile ackPosBeg;
     uint8_t volatile ackPosEnd;
     uint8_t volatile ackQueueSize;
-    
+
+    //uint8_t volatile confirmedPackets[MAX_TX_PACKET_QUEUE];
+    //uint8_t volatile confirmedStackSize;
+
     // sign that there is received packet in buffer adressed to this device
 	// 0 means no packets
 	// 1..x means number of packets ready
