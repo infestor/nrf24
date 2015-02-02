@@ -7,8 +7,17 @@
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
-uint16_t volatile adcVal;
 uint8_t sendResult;
+
+typedef union {
+uint16_t intVal;
+struct {
+ uint8_t lsb;
+ uint8_t msb;
+};
+} IntUnion;
+
+IntUnion volatile adcVal;
 
 #define DEV_ADDR 2
 #define NUM_SENSORS 2
@@ -37,7 +46,7 @@ void getAdcVal(void)
 	  sleep_cpu();
 
 	  // Reading register "ADCW" takes care of how to read ADCL and ADCH.
-	  adcVal = ADCW;
+	  adcVal.intVal = ADCW;
 }
 
 void setup()
@@ -104,7 +113,8 @@ int main(void)
 			 res->cmd = req->cmd;
 			 res->len = 2;
 			 res->from_sensor = req->for_sensor;
-			 res->payload[0] = pinState;
+			 res->payload[0] = adcVal.msb;
+			 res->payload[1] = adcVal.lsb;
 			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
 		}
 		else if (req->for_sensor == 1) //door switch
