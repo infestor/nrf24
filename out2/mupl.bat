@@ -1,0 +1,1 @@
+avrdude -patmega328p -carduino -P\\.\COM4 -b57600 -D -Uflash:w:nrf_comm_master.hex:i 
