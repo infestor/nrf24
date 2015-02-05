@@ -12,7 +12,7 @@
 
 // Nrf24l settings
 
-#define mirf_ADDR_LEN	5
+#define mirf_ADDR_LEN	3 //5
 const char mirf_ADDR[] = "honza";
 #define ADDR_TYPE uint8_t
 const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
@@ -21,7 +21,7 @@ const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
 #define MAX_TX_PACKET_QUEUE 1
 #define MAX_ACK_PACKET_QUEUE 6
 #define MAX_TX_ATTEMPTS 4
-#define MAX_ACK_WAIT_TIME 5
+#define MAX_ACK_WAIT_TIME 25
 #define NOP_ASM __asm__("nop\n\t");
 
 typedef struct {
@@ -30,7 +30,7 @@ typedef struct {
   //ADDR_TYPE origAddr;
   uint8_t  type;
   uint8_t  counter;
-  uint8_t  payload[10];
+  uint8_t  payload[7];
 } mirfPacket;
 
 //==========================================================================
@@ -44,7 +44,7 @@ class Nrf24l {
 	void setADDR(void);
     void setDevAddr(ADDR_TYPE);
 	bool dataReady();
-	bool isSending();
+	volatile bool isSending();
 	bool rxFifoEmpty();
 	bool txFifoEmpty();
 	void getData(uint8_t * data);
@@ -53,21 +53,13 @@ class Nrf24l {
 
 	void removePacketfromTxQueue(void);
 	void removePacketfromAckQueue(void);
-
-	//void addConfirmedPacket(uint8_t counter);
-	//uint8_t isPacketConfirmed(uint8_t counter);
-	//void removePacketFromConfirmed(uint8_t index);
-
-	//uint8_t isPacketInTxQueue(uint8_t counter);
-
-	//void packetSent(void);
+  
     void handleRxLoop(void);
     void handleTxLoop(void);
     void readPacket(mirfPacket* paket);
     uint8_t sendPacket(mirfPacket* paket);
     void createAck(mirfPacket* paket);
 
-    void maintenanceLoop(void);
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 	void configRegister(uint8_t reg, uint8_t value);
 	void readRegister(uint8_t reg, uint8_t * value, uint8_t len);
@@ -79,7 +71,8 @@ class Nrf24l {
 	void powerDown();
 		
 	void nrfSpiWrite(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
-
+	void nrfSpiWrite2(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
+  
 	void csnHi();
 	void csnLow();
 	void ceHi();
@@ -134,7 +127,7 @@ class Nrf24l {
 		//MirfSpiDriver *spi; //MirfSpiDriver
 
     //-------------------------------------------------------------------------
-    mirfPacket pendingPacket;
+    mirfPacket volatile pendingPacket;
 
     mirfPacket volatile rxQueue[MAX_RX_PACKET_QUEUE];
     uint8_t volatile rxPosBeg;
@@ -166,6 +159,7 @@ class Nrf24l {
     //3 means packet sent, but waiting for ACK
     //4 means timeout
     uint8_t volatile sendingStatus;
+    uint8_t volatile sendResult;  //sending status is copied here, to be able to send next packets
     
     //incremented with every new sent packet (used for identification of ACKs)
     uint8_t packetCounter;
@@ -173,7 +167,7 @@ class Nrf24l {
     //increments with every call of periodic Rx and Tx handle loop functions
     //dedicated to recognize timeouts in waiting for ACK
     //and to measure random time between send attempts
-    uint8_t Timer;
+    uint8_t volatile Timer;
     uint8_t volatile TimerNewAttempt;
     uint8_t volatile ackTimeoutTimer; //timer state when timeout will occur
     

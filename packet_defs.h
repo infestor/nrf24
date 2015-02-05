@@ -8,7 +8,8 @@ typedef enum {
   IN_FIFO = 1,
   WAIT_FREE_AIR = 2,
   WAIT_ACK = 3,
-  TIMEOUT = 4
+  TIMEOUT = 4,
+  MAX_ATTEMPTS = 5
 } SENDING_STATUS;
 
 typedef enum {
@@ -44,7 +45,7 @@ typedef struct {
   uint8_t cmd; //command to be executed by receiving node
   uint8_t len;
   uint8_t for_sensor;
-  uint8_t payload[7];
+  uint8_t payload[4];
 } payloadRequestStruct;
 
 
@@ -53,11 +54,11 @@ typedef struct {
   uint8_t cmd; //executed command by receiving node (same as in request packet)
   uint8_t len;
   uint8_t from_sensor;
-  uint8_t payload[7];
+  uint8_t payload[4];
 } payloadResponseStruct;
 
 //for presentation packet
 typedef struct {
   uint8_t num_sensors;
-  uint8_t sensor_type[9];
+  uint8_t sensor_type[6];
 } payloadPresentationStruct;
