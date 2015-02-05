@@ -27,7 +27,8 @@ typedef enum {
 typedef enum {
   ON_OFF_OUTPUT = 0,
   TEMP = 1,
-  DOOR_SWITCH = 2
+  DOOR_SWITCH = 2,
+  INTERNAL_TEMP = 3
 } SENSOR_TYPE;
 
 //payload related structures
@@ -37,7 +38,9 @@ typedef enum {
   WRITE = 1,
   WRITE_FIRST = 2,
   WRITE_MIDDLE = 3,
-  WRITE_LAST = 4
+  WRITE_LAST = 4,
+  CALIBRATION_WRITE = 5,
+  CALIBRATION_READ = 6
 } CMD_TYPE;
 
 //for type REQUEST

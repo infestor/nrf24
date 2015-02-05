@@ -2,16 +2,23 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h> 
 #include <avr/sleep.h>
+#include <avr/eeprom.h>
 #include <string.h>
 #include <stdio.h>
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
 
+#define DEV_ADDR 2
+#define NUM_SENSORS 2
+#define SWITCHED_PIN 9
+#define SENSOR_0_CALIB_ADDR (uint8_t *)1
+
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
 char buff[40];
-
+uint8_t internalTempCalib;
+uint8_t internalTempCalibValid;
 uint8_t sendResult;
 
 typedef union {
@@ -22,11 +29,7 @@ typedef union {
   };
 } IntUnion;
 
-IntUnion volatile adcVal;
-
-#define DEV_ADDR 2
-#define NUM_SENSORS 2
-#define SWITCHED_PIN 9
+uint8_t volatile adcVal;
 
 void USART_Transmit( char *data, uint8_t len )
 {
@@ -62,7 +65,7 @@ void getAdcVal(void)
 	  sleep_cpu();
 
 	  // Reading register "ADCW" takes care of how to read ADCL and ADCH.
-	  adcVal.uint = ADCW;
+	  //adcVal = ADCW;
 }
 
 void setup()
@@ -73,6 +76,10 @@ void setup()
   UCSR0C = _BV(UCSZ01) | _BV(UCSZ00);
   UCSR0B = _BV(RXEN0) | _BV(TXEN0);
   
+  //read internal temp sensor calibration byte from eeprom
+  internalTempCalib = eeprom_read_byte(SENSOR_0_CALIB_ADDR);
+  if (internalTempCalib == 0xFF) internalTempCalib = 128; else internalTempCalibValid = 1;
+
   //start Radio
   Mirf.init();
   Mirf.config();
@@ -132,29 +139,47 @@ int main(void)
      USART_Transmit((char*)buff, strlen((char*)buff) );
           
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
-	   {
+	 {
 	    payloadRequestStruct *req = (payloadRequestStruct*)&inPacket.payload;
-		  outPacket.type = RESPONSE;
-		  outPacket.rxAddr = inPacket.txAddr;
-		  payloadResponseStruct *res = (payloadResponseStruct*)&outPacket.payload;
+		outPacket.type = RESPONSE;
+		outPacket.rxAddr = inPacket.txAddr;
+		payloadResponseStruct *res = (payloadResponseStruct*)&outPacket.payload;
+		res->cmd = req->cmd;
+  		res->from_sensor = req->for_sensor;
 
-  	  if ( (req->for_sensor == 0) && (req->cmd == READ) ) //temp sensor
-  		{
-  			 res->cmd = req->cmd;
-  			 res->len = 2;
-  			 res->from_sensor = req->for_sensor;
-         getAdcVal();
-  			 res->payload[0] = adcVal.lsb;
-  			 res->payload[1] = adcVal.msb;
-  			 sendResult = Mirf.sendResult;
-         uint8_t a = Mirf.sendPacket((mirfPacket*)&outPacket);
-         sprintf((char*)buff, "out: RX:%d,TX:%d,T:%d,C:%d\n", outPacket.rxAddr, outPacket.txAddr, outPacket.type, outPacket.counter);
-         USART_Transmit((char*)buff, strlen((char*)buff) );
-         sprintf((char*)buff, "lastStat: %d\n", sendResult);
-         USART_Transmit((char*)buff, strlen((char*)buff) );
+  	    if (req->for_sensor == 0) //==== internal temp sensor =====
+  	    {
+  	    	if (req->cmd == READ)
+  	    	{
+  	    		res->len = 1;
+  	    		getAdcVal();
+  	    		adcVal = ADCW - 19 - internalTempCalib;
+  	    		res->payload[0] = adcVal;
+  	    		sendResult = Mirf.sendResult;
+  	    		Mirf.sendPacket((mirfPacket*)&outPacket);
+//  	    		sprintf((char*)buff, "out: RX:%d,TX:%d,T:%d,C:%d\n", outPacket.rxAddr, outPacket.txAddr, outPacket.type, outPacket.counter);
+//  	    		USART_Transmit((char*)buff, strlen((char*)buff) );
+//  	    		sprintf((char*)buff, "lastStat: %d\n", sendResult);
+//  	    		USART_Transmit((char*)buff, strlen((char*)buff) );
+  	    	}
+  	    	else if (req->cmd == CALIBRATION_WRITE)
+  	    	{
+  	    		if (internalTempCalib != req->payload[0])
+  	    		{
+  	    			internalTempCalib = req->payload[0];
+  	    			internalTempCalibValid = 1;
+  	    			eeprom_write_byte(SENSOR_0_CALIB_ADDR, req->payload[0]);
+  	    		}
+  	    	}
+  	    	else if (req->cmd == CALIBRATION_READ)
+  	    	{
+  	    		res->len = 1;
+  	    		if (internalTempCalibValid) res->payload[0]=internalTempCalib; else res->payload[0]=0xFF;
+  	    		Mirf.sendPacket((mirfPacket*)&outPacket);
+  	    	}
          
   		}
-  		else if (req->for_sensor == 1) //door switch
+  		else if (req->for_sensor == 1) //==== door switch =====
   		{  
   		  if (req->cmd == WRITE)
   		  {
@@ -163,14 +188,12 @@ int main(void)
   		  }
   		  else if (req->cmd == READ)
   		  {
-  			 res->cmd = req->cmd;
   			 res->len = 1;
-  			 res->from_sensor = req->for_sensor;
   			 res->payload[0] = pinState;
   			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
   		  }
-      }
-	  }
+        }
+	 }
    }
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {

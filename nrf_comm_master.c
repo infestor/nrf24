@@ -7,10 +7,16 @@
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
 
+#define DEV_ADDR 1
+
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t sendResult;
-uint16_t volatile citac;
+uint8_t volatile citac;
+uint8_t volatile uartPos = 0;
+//uint8_t volatile uartBufEmpty = 1;
+uint8_t volatile uartIncoming = 0;
+
 char buff[35];
 
 typedef union {
@@ -21,9 +27,7 @@ typedef union {
   };
 } IntUnion;
 
-IntUnion volatile adcVal;
-
-#define DEV_ADDR 1
+//IntUnion volatile adcVal;
 
 //======================================================
 ISR(TIMER0_COMPA_vect) {
@@ -34,6 +38,35 @@ ISR(TIMER0_COMPA_vect) {
 
 ISR(BADISR_vect) { //just for case
   __asm__("nop\n\t");
+}
+
+ISR(USART_RX_vect)
+{
+	uint8_t inp = UDR0;
+
+	if (uartIncoming == 0)
+	{
+		if (inp == 254)
+		{
+			uartIncoming = 1;
+			//uartBufEmpty = 1;
+			uartPos = 0;
+			citac = 0;
+		}
+	}
+	else
+	{
+		if (uartPos == sizeof(mirfPacket)) //incoming packet is longer than allowed
+		{
+			uartIncoming = 0;
+		}
+		else
+		{
+			((char*)&outPacket)[uartPos] = inp;
+			uartPos++;
+		}
+	}
+
 }
 //==========================================================
 
@@ -83,7 +116,7 @@ void setup()
   UBRR0H = 0;
   UBRR0L = 16;
   UCSR0C = _BV(UCSZ01) | _BV(UCSZ00);
-  UCSR0B = _BV(RXEN0) | _BV(TXEN0);
+  UCSR0B = _BV(RXCIE0) | _BV(RXEN0) | _BV(TXEN0);
 
   //start radio    
   Mirf.init();
@@ -132,45 +165,32 @@ int main(void)
       
  //------------------------------------
  while(1) {
-   //zpracovat prichozi packet
-   if (Mirf.inPacketReady)
-   {
-     Mirf.readPacket((mirfPacket*)&inPacket);
-     //sprintf(buff, "RX:%d,TX:%d,T:%d,C:%d,P:%d\n", inPacket.rxAddr, inPacket.txAddr, inPacket.type, inPacket.counter, inPacket.payload[0]);
-     //USART_Transmit(buff, strlen(buff) );
-     
-     if ( ((PACKET_TYPE)inPacket.type == RESPONSE) && (inPacket.txAddr == 2) )
-	   {
-		   payloadResponseStruct *res = (payloadResponseStruct*)&inPacket.payload;
+	 //zpracovat prichozi packet
+	 if (Mirf.inPacketReady)
+	 {
+		 if (!uartIncoming)
+		 {
+			 Mirf.readPacket((mirfPacket*)&inPacket);
+			 //send whole packet through usart
+			 USART_Transmit((char*)&inPacket, sizeof(mirfPacket));
 
-	     if ( (res->from_sensor == 0) && (res->len==2) ) //temp sensor
-		   {
-			   adcVal.lsb = res->payload[0];
-			   adcVal.msb = res->payload[1];
-         //send the value through rs232
-         double ff = ((adcVal.uint - 324.31 ) / 1.22);
-         sprintf(buff, "\nT=%d, %f\n", adcVal.uint, ff);        
-         USART_Transmit(buff, strlen(buff) );
-	     }
-	   }
-   }
-   else //if there is no packet to be processed,
-   {
-    if (citac > 500)  //time to send request
-    {
-      uint8_t last = Mirf.sendResult;
-      if (Mirf.sendingStatus == 0) sendResult = Mirf.sendPacket((mirfPacket*)&outPacket); else sendResult = 99;
-      sprintf(buff, "\nS:%d, R:%d ", sendResult, last);
-      USART_Transmit(buff, strlen(buff) );
-      citac = 0;
-      //debug();
-    }
-    
-    // we can enter idle mode to save some power
-	  sleep_enable();
-	  sleep_cpu();
-	  sleep_disable();
-   }
+			 //sprintf(buff, "RX:%d,TX:%d,T:%d,C:%d,P:%d\n", inPacket.rxAddr, inPacket.txAddr, inPacket.type, inPacket.counter, inPacket.payload[0]);
+			 //USART_Transmit(buff, strlen(buff) );
+		 }
+	 }
+
+	 if ( (uartIncoming) && (uartPos == (sizeof(mirfPacket)-1)) ) //whole packet is received
+	 {
+		 Mirf.sendPacket((mirfPacket*)&outPacket);
+		 uartIncoming = 0;
+	 }
+
+	 if ((uartIncoming) && (citac > 1) ) //timeout receiving whole packet
+	 {
+		 uartIncoming = 0; //reset receiving
+	 }
+
+
  }
 
  return 0;

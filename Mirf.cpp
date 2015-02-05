@@ -432,7 +432,9 @@ void Nrf24l::powerUpRx() {
 
 	configRegister(CONFIG, baseConfig | _BV(PWR_UP) | _BV(PRIM_RX));
 	configRegister(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT)); 
+	#ifdef _DEBUG_
 	UDR0 = 95; //DEBUG _
+	#endif
 	ceHi();
 }
 
@@ -443,7 +445,9 @@ void Nrf24l::flushRx(){
 void Nrf24l::powerUpTx() {
 	PTX = 1;
 	ceLow();
+	#ifdef _DEBUG_
 	UDR0 = 33; //DEBUG !
+	#endif
 	configRegister(CONFIG, baseConfig | (_BV(PWR_UP) & ~_BV(PRIM_RX)) );
 }
 
