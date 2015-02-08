@@ -21,33 +21,37 @@ void Nrf24l::handleRxLoop(void)
    {
 	  getData( (uint8_t*) &pendingPacket);
       
-      if ( (pendingPacket.rxAddr == devAddr) || (pendingPacket.rxAddr == MULTICAST_ADDR) )
-      { //is the packet for this device? or multicast
-        if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
-        {
-          //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
-		  #ifdef _DEBUG_
-          UDR0 = 60; //DEBUG <
-		  #endif
-          if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) ) //ack for sent packet received
-          {
-            sendingStatus = 0;
-            sendResult = 0;
-            removePacketfromTxQueue();
-            //remove sent packet from queue
-            //and add confirmation to confirmed queue
-            //addConfirmedPacket(pendingPacket.counter);
-          }
-        }
-        else 
-        { //other packets are saved to queue and app has to hadle them
-          memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, payload);
-          inPacketReady++;
-          rxPosEnd++;
-          if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-          createAck((mirfPacket*)&pendingPacket);
-        }
-      }
+	  if ( (pendingPacket.rxAddr == devAddr) || (pendingPacket.rxAddr == MULTICAST_ADDR) )
+	  { //is the packet for this device? or multicast
+		  if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
+		  {
+			  //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
+			  #ifdef _DEBUG_
+			  UDR0 = 60; //DEBUG <
+			  #endif
+			  if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) ) //ack for sent packet received
+			  {
+				  sendingStatus = 0;
+				  sendResult = 0;
+				  removePacketfromTxQueue();
+				  //remove sent packet from queue
+				  //and add confirmation to confirmed queue
+				  //addConfirmedPacket(pendingPacket.counter);
+			  }
+		  }
+		  else if (pendingPacket.type == PING)
+		  {
+			  createAck((mirfPacket*)&pendingPacket);
+		  }
+		  else
+		  { //other packets are saved to queue and app has to hadle them
+			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, payload);
+			  inPacketReady++;
+			  rxPosEnd++;
+			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
+			  createAck((mirfPacket*)&pendingPacket);
+		  }
+	  }
       
       //we have to have some theoretical limit staying in this function
       //because if there were too much incoming packets all the time,
@@ -180,7 +184,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
      return 0;
   }
 
-  if (txQueueSize == MAX_TX_PACKET_QUEUE) return 255;
+  if (txQueueSize == MAX_TX_PACKET_QUEUE) return 0;
 
   //set all parameters in packet
   cli();

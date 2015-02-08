@@ -45,7 +45,7 @@ INCLUDES =
 LIBDIRS =
 
 ## Objects that must be built in order to link
-OBJECTS = nrf_comm.o arduino_simple.o Mirf.o spilib.o 
+OBJECTS = nrf_comm.o arduino_simple.o Mirf.o spilib.o onewire.o ds18x20.o
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -67,6 +67,12 @@ spilib.o: ../spilib.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 Mirf.o: ../Mirf.cpp
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+onewire.o: ../onewire.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+ds18x20.o: ../ds18x20.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link

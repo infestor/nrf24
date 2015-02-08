@@ -16,6 +16,7 @@ uint8_t volatile citac;
 uint8_t volatile uartPos = 0;
 //uint8_t volatile uartBufEmpty = 1;
 uint8_t volatile uartIncoming = 0;
+uint8_t volatile awaitingResult;
 
 char buff[35];
 
@@ -181,14 +182,41 @@ int main(void)
 
 	 if ( (uartIncoming) && (uartPos == (sizeof(mirfPacket)-1)) ) //whole packet is received
 	 {
-		 Mirf.sendPacket((mirfPacket*)&outPacket);
+		 uint8_t res = Mirf.sendPacket((mirfPacket*)&outPacket);
 		 uartIncoming = 0;
+
+		 if (res == 0) //packet was not transmitted
+		 {
+			 USART_Transmit("ER", 2);
+			 awaitingResult = 0;
+		 }
+		 else //packet was sent, we will wait for sendResult and send it to usart
+		 {
+			 awaitingResult = 1;
+		 }
+	 }
+
+	 if (awaitingResult && (Mirf.sendResult != 1) ) //we are waiting for send result and it changed from in queue to some other value
+	 {
+		 if (Mirf.sendResult == 0) {
+			 USART_Transmit("OK", 2);
+		 }
+		 else if (Mirf.sendResult == TIMEOUT) {
+			 USART_Transmit("TO", 2);
+		 }
+		 else if (Mirf.sendResult == MAX_ATTEMPTS) {
+			 USART_Transmit("MA", 2);
+		 }
+
+		 awaitingResult = 0;
 	 }
 
 	 if ((uartIncoming) && (citac > 1) ) //timeout receiving whole packet
 	 {
 		 uartIncoming = 0; //reset receiving
 	 }
+
+
 
 
  }

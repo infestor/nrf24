@@ -7,16 +7,27 @@
 #include <stdio.h>
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
+#include "onewire.h"
+#include "ds18x20.h"
 
-#define DEV_ADDR 2
-#define NUM_SENSORS 2
+#define DEV_ADDR 3
+#define NUM_SENSORS 4
 #define SWITCHED_PIN 9
 #define SENSOR_0_CALIB_ADDR (uint8_t *)1
+
+#define SENSOR_0_TYPE 3 //internal temp
+#define SENSOR_1_TYPE 0 //on-off output
+#define SENSOR_2_TYPE 4 //dallas 18b20 temp sensor
+#define SENSOR_3_TYPE 6 //2 lion in series supply
+
+#define MAXSENSORS 1
+uint8_t gDallasID[OW_ROMCODE_SIZE];
+uint8_t gDallasReady;
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
-char buff[40];
+char buff[30];
 uint8_t internalTempCalib;
 uint8_t internalTempCalibValid;
 uint8_t sendResult;
@@ -80,6 +91,19 @@ void setup()
   internalTempCalib = eeprom_read_byte(SENSOR_0_CALIB_ADDR);
   if (internalTempCalib == 0xFF) internalTempCalib = 128; else internalTempCalibValid = 1;
 
+  //start one wire comm and initialize dallas sensor
+  //uint8_t diff = OW_SEARCH_FIRST;
+  gDallasReady = 1;
+//  if (DS18X20_find_sensor( &diff, &gDallasID[0] ) == DS18X20_OK)
+//  {
+//	 gDallasReady = 1;
+//  }
+//  else
+//  {
+//	  gDallasID[0] = diff;
+//  }
+  //DS18X20_get_power_status()
+
   //start Radio
   Mirf.init();
   Mirf.config();
@@ -116,12 +140,12 @@ int main(void)
 
  //nejak poslat PRESENTATION paket
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
- outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
- outPacket.rxAddr = 1;
- outPacket.type = (PACKET_TYPE)PRESENTATION;
- ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = 2;
- ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = TEMP;
- ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[1] = ON_OFF_OUTPUT;
+// outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
+// outPacket.rxAddr = 1;
+// outPacket.type = (PACKET_TYPE)PRESENTATION;
+// ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = 2;
+// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = TEMP;
+// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[1] = ON_OFF_OUTPUT;
 
  //send the presentation packet. Try it until ACK is received
  //while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
@@ -135,7 +159,7 @@ int main(void)
    {
      Mirf.readPacket((mirfPacket*)&inPacket);
      
-     sprintf((char*)buff, "\nin:  RX:%d,TX:%d,T:%d,C:%d\n", inPacket.rxAddr, inPacket.txAddr, inPacket.type, inPacket.counter);
+     sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
      USART_Transmit((char*)buff, strlen((char*)buff) );
           
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
@@ -146,21 +170,17 @@ int main(void)
 		payloadResponseStruct *res = (payloadResponseStruct*)&outPacket.payload;
 		res->cmd = req->cmd;
   		res->from_sensor = req->for_sensor;
+  		res->len = 1;
 
   	    if (req->for_sensor == 0) //==== internal temp sensor =====
   	    {
   	    	if (req->cmd == READ)
   	    	{
-  	    		res->len = 1;
   	    		getAdcVal();
   	    		adcVal = ADCW - 19 - internalTempCalib;
   	    		res->payload[0] = adcVal;
   	    		sendResult = Mirf.sendResult;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
-//  	    		sprintf((char*)buff, "out: RX:%d,TX:%d,T:%d,C:%d\n", outPacket.rxAddr, outPacket.txAddr, outPacket.type, outPacket.counter);
-//  	    		USART_Transmit((char*)buff, strlen((char*)buff) );
-//  	    		sprintf((char*)buff, "lastStat: %d\n", sendResult);
-//  	    		USART_Transmit((char*)buff, strlen((char*)buff) );
   	    	}
   	    	else if (req->cmd == CALIBRATION_WRITE)
   	    	{
@@ -173,7 +193,6 @@ int main(void)
   	    	}
   	    	else if (req->cmd == CALIBRATION_READ)
   	    	{
-  	    		res->len = 1;
   	    		if (internalTempCalibValid) res->payload[0]=internalTempCalib; else res->payload[0]=0xFF;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
   	    	}
@@ -184,16 +203,54 @@ int main(void)
   		  if (req->cmd == WRITE)
   		  {
   		     if (req->payload[0] > 0) pinState = HIGH; else pinState = LOW;
-  			 digitalWrite(SWITCHED_PIN, pinState);
+  			 //digitalWrite(SWITCHED_PIN, pinState);
   		  }
   		  else if (req->cmd == READ)
   		  {
-  			 res->len = 1;
   			 res->payload[0] = pinState;
   			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
   		  }
         }
+  		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
+  		{
+  			if (gDallasReady) //sensor found during setup and ready for measurements
+  			{
+  				uint8_t sp[DS18X20_SP_SIZE];
+  				DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
+  				while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
+  				ow_command( DS18X20_READ, NULL );
+  					for ( uint8_t i = 0; i < DS18X20_SP_SIZE; i++ ) {
+  						sp[i] = ow_byte_rd();
+  					}
+  		  		res->len = 2;
+  				res->payload[0] = sp[0];
+  				res->payload[1] = sp[1];
+  				//DS18X20_read_maxres_single( gDallasID[0], &temp_eminus4 );
+  			}
+  			else //sensor was not properly setup, so we have to send error value
+  			{
+  				res->payload[0] = gDallasID[0];
+  			}
+  			Mirf.sendPacket((mirfPacket*)&outPacket);
+  		}
+  		else if (req->for_sensor == 3) //==== voltage of supply battery ====
+  		{ //it is 2 cells in series, so there will be divider /2 on the input (real voltage would be 2x)
+  			res->len = 2;
+  			Mirf.sendPacket((mirfPacket*)&outPacket);
+  		}
 	 }
+     else if ( (PACKET_TYPE)inPacket.type == PRESENTATION_REQUEST )
+     {
+ 		outPacket.type = PRESENTATION_RESPONSE;
+ 		outPacket.rxAddr = inPacket.txAddr;
+ 		payloadPresentationStruct *res = (payloadPresentationStruct*)&outPacket.payload;
+ 		res->num_sensors = NUM_SENSORS;
+   		res->sensor_type[0] = SENSOR_0_TYPE;
+   		res->sensor_type[1] = SENSOR_1_TYPE;
+   		res->sensor_type[2] = SENSOR_2_TYPE;
+   		res->sensor_type[3] = SENSOR_3_TYPE;
+   		Mirf.sendPacket((mirfPacket*)&outPacket);
+     }
    }
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
