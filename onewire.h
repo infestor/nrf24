@@ -20,16 +20,18 @@ extern "C" {
 
 #ifdef OW_ONE_BUS
 
+#if DEV_ADDR == 3
 #define OW_PIN  PC5
 #define OW_IN   PINC
 #define OW_OUT  PORTC
 #define OW_DDR  DDRC
-/*
+#else
 #define OW_PIN  PD2
 #define OW_IN   PIND
 #define OW_OUT  PORTD
 #define OW_DDR  DDRD
-*/
+#endif
+
 #define OW_CONF_DELAYOFFSET 0
 
 #else 

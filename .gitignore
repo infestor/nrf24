@@ -1,3 +1,4 @@
 *.out
 pokus.c
-
+.DS_Store
+Mirf_old.cpp

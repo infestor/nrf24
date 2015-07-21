@@ -7,11 +7,13 @@
 #include <stdio.h>
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
+
+#define DEV_ADDR 2
+
 #include "onewire.h"
 #include "ds18x20.h"
 
-#define DEV_ADDR 3
-#define NUM_SENSORS 4
+#define NUM_SENSORS 3
 #define SWITCHED_PIN 9
 #define SENSOR_0_CALIB_ADDR (uint8_t *)1
 
@@ -21,7 +23,7 @@
 #define SENSOR_3_TYPE 6 //2 lion in series supply
 
 #define MAXSENSORS 1
-uint8_t gDallasID[OW_ROMCODE_SIZE];
+//uint8_t gDallasID[OW_ROMCODE_SIZE];
 uint8_t gDallasReady;
 
 mirfPacket volatile inPacket;
@@ -29,8 +31,8 @@ mirfPacket volatile outPacket;
 uint8_t volatile pinState;
 char buff[30];
 uint8_t internalTempCalib;
-uint8_t internalTempCalibValid;
 uint8_t sendResult;
+uint16_t longTimer;
 
 typedef union {
   uint16_t uint;
@@ -57,6 +59,8 @@ void USART_Transmit( char *data, uint8_t len )
 ISR(TIMER0_COMPA_vect) {
   	Mirf.handleRxLoop();
   	Mirf.handleTxLoop();
+  	
+  	longTimer++;
 }
 
 ISR(BADISR_vect) { //just for case
@@ -89,7 +93,7 @@ void setup()
   
   //read internal temp sensor calibration byte from eeprom
   internalTempCalib = eeprom_read_byte(SENSOR_0_CALIB_ADDR);
-  if (internalTempCalib == 0xFF) internalTempCalib = 128; else internalTempCalibValid = 1;
+  if (internalTempCalib == 0xFF) internalTempCalib = 128;
 
   //start one wire comm and initialize dallas sensor
   //uint8_t diff = OW_SEARCH_FIRST;
@@ -187,13 +191,12 @@ int main(void)
   	    		if (internalTempCalib != req->payload[0])
   	    		{
   	    			internalTempCalib = req->payload[0];
-  	    			internalTempCalibValid = 1;
   	    			eeprom_write_byte(SENSOR_0_CALIB_ADDR, req->payload[0]);
   	    		}
   	    	}
   	    	else if (req->cmd == CALIBRATION_READ)
   	    	{
-  	    		if (internalTempCalibValid) res->payload[0]=internalTempCalib; else res->payload[0]=0xFF;
+  	    		res->payload[0] = internalTempCalib;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
   	    	}
          
@@ -229,7 +232,7 @@ int main(void)
   			}
   			else //sensor was not properly setup, so we have to send error value
   			{
-  				res->payload[0] = gDallasID[0];
+  				res->payload[0] = 0xFF; //gDallasID[0];
   			}
   			Mirf.sendPacket((mirfPacket*)&outPacket);
   		}
@@ -251,6 +254,16 @@ int main(void)
    		res->sensor_type[3] = SENSOR_3_TYPE;
    		Mirf.sendPacket((mirfPacket*)&outPacket);
      }
+   }
+   else if (longTimer > 3000) //30sec period
+   {
+   		//test environment temp and if it is over 25 degrees, switch channel 1MHz lower
+   		longTimer = 0;
+   		getAdcVal();
+  	    adcVal = ADCW - 19 - internalTempCalib;
+  	    uint8_t newChann = Mirf.channel;
+  	    if (adcVal > 133) newChann -= 1;	    	
+  	    Mirf.configRegister(RF_CH, newChann);
    }
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
