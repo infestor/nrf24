@@ -24,7 +24,7 @@
 
 #define MAXSENSORS 1
 //uint8_t gDallasID[OW_ROMCODE_SIZE];
-uint8_t gDallasReady;
+
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
@@ -97,7 +97,7 @@ void setup()
 
   //start one wire comm and initialize dallas sensor
   //uint8_t diff = OW_SEARCH_FIRST;
-  gDallasReady = 1;
+//gDallasReady = 1;
 //  if (DS18X20_find_sensor( &diff, &gDallasID[0] ) == DS18X20_OK)
 //  {
 //	 gDallasReady = 1;
@@ -142,18 +142,7 @@ int main(void)
 
  setup();
 
- //nejak poslat PRESENTATION paket
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
-// outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
-// outPacket.rxAddr = 1;
-// outPacket.type = (PACKET_TYPE)PRESENTATION;
-// ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = 2;
-// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = TEMP;
-// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[1] = ON_OFF_OUTPUT;
-
- //send the presentation packet. Try it until ACK is received
- //while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
- 
  memset(buff, 0, sizeof(buff));
  
  //debug();
@@ -163,8 +152,8 @@ int main(void)
    {
      Mirf.readPacket((mirfPacket*)&inPacket);
      
-     sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
-     USART_Transmit((char*)buff, strlen((char*)buff) );
+     //sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
+     //USART_Transmit((char*)buff, strlen((char*)buff) );
           
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
 	 {
@@ -216,8 +205,6 @@ int main(void)
         }
   		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
   		{
-  			if (gDallasReady) //sensor found during setup and ready for measurements
-  			{
   				uint8_t sp[DS18X20_SP_SIZE];
   				DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
   				while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
@@ -229,11 +216,6 @@ int main(void)
   				res->payload[0] = sp[0];
   				res->payload[1] = sp[1];
   				//DS18X20_read_maxres_single( gDallasID[0], &temp_eminus4 );
-  			}
-  			else //sensor was not properly setup, so we have to send error value
-  			{
-  				res->payload[0] = 0xFF; //gDallasID[0];
-  			}
   			Mirf.sendPacket((mirfPacket*)&outPacket);
   		}
   		else if (req->for_sensor == 3) //==== voltage of supply battery ====
@@ -262,8 +244,25 @@ int main(void)
    		getAdcVal();
   	    adcVal = ADCW - 19 - internalTempCalib;
   	    uint8_t newChann = Mirf.channel;
-  	    if (adcVal > 133) newChann -= 1;	    	
-  	    Mirf.configRegister(RF_CH, newChann);
+        static uint8_t channel_altered = 0;
+  	    if ( (adcVal > 133) )
+        {
+          if (channel_altered == 0)
+          {
+            newChann -= 1;
+            channel_altered = 1;
+  	        Mirf.configRegister(RF_CH, newChann);
+          }
+        }
+        else
+        {
+          if (channel_altered == 1)
+          {
+            newChann += 1;
+            channel_altered = 0;
+  	        Mirf.configRegister(RF_CH, newChann);
+          }        
+        }	    	
    }
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
@@ -275,30 +274,3 @@ int main(void)
 
  return 0;
 }
-
-// void debug(void)
-// {
-//   uint8_t i;
-//   uint8_t volatile rr;
-//   uint8_t adr[5];
-//   
-//   cli();
-//   for (i=0; i< 10; i++)
-//   {
-//     Mirf.readRegister(i, (uint8_t*)&rr, 1);
-//     sprintf(buff, "%d:%d,", i, rr);
-//     USART_Transmit(buff, strlen(buff) );
-//   }
-//   sprintf(buff, "\n");
-//   USART_Transmit(buff, strlen(buff) );
-//   
-//   Mirf.readRegister(TX_ADDR, (uint8_t*)&adr, 5);
-//   sprintf(buff, "TX: 0x%2x%2x%2x%2x%2x\n", adr[0], adr[1], adr[2], adr[3], adr[4]);
-//   USART_Transmit(buff, strlen(buff) );
-// 
-//   Mirf.readRegister(RX_ADDR_P0, (uint8_t*)&adr, 5);
-//   sprintf(buff, "RX: 0x%2x%2x%2x%2x%2x\n", adr[0], adr[1], adr[2], adr[3], adr[4]);
-//   USART_Transmit(buff, strlen(buff) );
-//   
-//   sei();
-// }

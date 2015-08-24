@@ -33,6 +33,8 @@ typedef struct {
   uint8_t  payload[7];
 } mirfPacket;
 
+#define NRF_PAYLOAD_SIZE sizeof(mirfPacket)
+
 //==========================================================================
 class Nrf24l {
 	public:
@@ -89,22 +91,17 @@ class Nrf24l {
 		/**
 		 * CE Pin controls RX / TX, default D9.
 		 */
-		uint8_t cePin;
+		//uint8_t cePin;
 
 		/**
 		 * CSN Pin Chip Select Not, default D10.
 		 */
-		uint8_t csnPin;
+		//uint8_t csnPin;
 
 		/**
 		 * Channel 0 - 127 or 0 - 84 in the US.
 		 */
 		uint8_t channel;
-
-		/**
-		 * Payload size in bytes default 16 max 32.
-		 */
-		uint8_t payload;
 
 		/**
 		 * The base config register.
@@ -164,6 +161,13 @@ class Nrf24l {
     //incremented with every new sent packet (used for identification of ACKs)
     uint8_t packetCounter;
     
+    //address of last transmitter from which packet was received and processed
+    //used for detecting of same packet, which ACK was probably not received by transmitter
+    //so it is sending the same packet again
+    //so we send ack again, but not process the packet because it was already processed 
+    uint8_t last_addr_in;
+    uint8_t last_packetCounter_in;
+        
     //increments with every call of periodic Rx and Tx handle loop functions
     //dedicated to recognize timeouts in waiting for ACK
     //and to measure random time between send attempts
