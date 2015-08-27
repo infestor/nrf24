@@ -15,7 +15,7 @@
 #define mirf_ADDR_LEN	3 //5
 const char mirf_ADDR[] = "honza";
 #define ADDR_TYPE uint8_t
-const ADDR_TYPE MULTICAST_ADDR = 0xFF; //for uint16 0xffff;
+#define MULTICAST_ADDR 0xFF //for uint16 0xffff;
 
 #define MAX_RX_PACKET_QUEUE 10
 #define MAX_TX_PACKET_QUEUE 1
@@ -161,12 +161,13 @@ class Nrf24l {
     //incremented with every new sent packet (used for identification of ACKs)
     uint8_t packetCounter;
     
+    //not fully implemented now
     //address of last transmitter from which packet was received and processed
     //used for detecting of same packet, which ACK was probably not received by transmitter
     //so it is sending the same packet again
     //so we send ack again, but not process the packet because it was already processed 
-    uint8_t last_addr_in;
-    uint8_t last_packetCounter_in;
+    //uint8_t last_addr_in;
+    //uint8_t last_packetCounter_in;
         
     //increments with every call of periodic Rx and Tx handle loop functions
     //dedicated to recognize timeouts in waiting for ACK

@@ -47,6 +47,9 @@ void Nrf24l::handleRxLoop(void)
 		  { //other packets are saved to queue and app has to hadle them
             if (inPacketReady != MAX_RX_PACKET_QUEUE) //if queue is not full
             {
+              //last_addr_in = pendingPacket.txAddr;
+              //last_packetCounter_in = pendingPacket.counter;
+                            
 			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
@@ -407,7 +410,7 @@ volatile bool Nrf24l::isSending() {
 // 
 // 		if((status & ((1 << TX_DS)  | (1 << MAX_RT)))){
 // 			powerUpRx();
-// 			return false; 
+// 			return false;                                                                                                    
 // 		}
 // 
 // 		return true;
@@ -433,7 +436,7 @@ uint8_t Nrf24l::getStatus(){
 	return rv;
 }
 
-void Nrf24l::flushTx() {
+inline void Nrf24l::flushTx() {
 	nrfSpiWrite(FLUSH_TX);
 	//configRegister(STATUS, _BV(TX_DS));
 }

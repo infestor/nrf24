@@ -1,1 +1,1 @@
-avrdude -patmega328p -carduino -P\\.\COM14 -b57600 -D -Uflash:w:nrf_comm.hex:i 
+c:\WinAVR-20100110\bin\avrdude -patmega328p -carduino -P\\.\COM4 -b57600 -D -Uflash:w:nrf_comm.hex:i 
