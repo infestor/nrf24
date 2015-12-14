@@ -13,7 +13,7 @@
 #include "onewire.h"
 #include "ds18x20.h"
 
-#define NUM_SENSORS 3
+#define NUM_SENSORS 4
 #define SWITCHED_PIN 9
 #define SENSOR_0_CALIB_ADDR (uint8_t *)1
 
@@ -24,12 +24,12 @@
 
 #define MAXSENSORS 1
 //uint8_t gDallasID[OW_ROMCODE_SIZE];
-uint8_t gDallasReady;
+
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
-char buff[30];
+//char buff[30];
 uint8_t internalTempCalib;
 uint8_t sendResult;
 uint16_t longTimer;
@@ -43,7 +43,9 @@ typedef union {
 } IntUnion;
 
 uint8_t volatile adcVal;
+volatile IntUnion ds1820Temp;
 
+//======================================================
 void USART_Transmit( char *data, uint8_t len )
 {
   for (uint8_t i=0; i < len; i++)
@@ -71,6 +73,28 @@ ISR(ADC_vect) {
 	  SMCR = 0; //disable sleep and enable normal Idle mode
 }
 
+void ReadDS1820(void)
+{
+//read temperature from DS1820 and store it to memory
+
+	//DS18X20_read_maxres_single( gDallasID[0], &temp_eminus4 );
+
+	DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
+	while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
+	ow_command( DS18X20_READ, NULL );
+	
+    //read 16bit value into uint16
+    ds1820Temp.lsb = ow_byte_rd();
+    ds1820Temp.msb = ow_byte_rd();
+    
+    //read rest of bytes from sensor, but we do not use the data
+    for ( uint8_t i = 2; i < DS18X20_SP_SIZE; i++ )
+    {
+		ow_byte_rd();
+	}
+}
+
+//======================================================
 void getAdcVal(void)
 {
 	  SMCR = 2; //enable ADC noise reduct sleep mode
@@ -83,6 +107,7 @@ void getAdcVal(void)
 	  //adcVal = ADCW;
 }
 
+//======================================================
 void setup()
 {
   //configure uart0  (57600, 8bits, no parity, 1 stop bit)
@@ -94,19 +119,6 @@ void setup()
   //read internal temp sensor calibration byte from eeprom
   internalTempCalib = eeprom_read_byte(SENSOR_0_CALIB_ADDR);
   if (internalTempCalib == 0xFF) internalTempCalib = 128;
-
-  //start one wire comm and initialize dallas sensor
-  //uint8_t diff = OW_SEARCH_FIRST;
-  gDallasReady = 1;
-//  if (DS18X20_find_sensor( &diff, &gDallasID[0] ) == DS18X20_OK)
-//  {
-//	 gDallasReady = 1;
-//  }
-//  else
-//  {
-//	  gDallasID[0] = diff;
-//  }
-  //DS18X20_get_power_status()
 
   //start Radio
   Mirf.init();
@@ -136,25 +148,16 @@ void setup()
   sei();
 }
 
+//======================================================
 int main(void)
 {
  wdt_disable();
 
  setup();
-
- //nejak poslat PRESENTATION paket
- memset((void*)&outPacket, 0, sizeof(mirfPacket) );
-// outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
-// outPacket.rxAddr = 1;
-// outPacket.type = (PACKET_TYPE)PRESENTATION;
-// ((payloadPresentationStruct *)&outPacket.payload)->num_sensors = 2;
-// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[0] = TEMP;
-// ((payloadPresentationStruct *)&outPacket.payload)->sensor_type[1] = ON_OFF_OUTPUT;
-
- //send the presentation packet. Try it until ACK is received
- //while( Mirf.sendPacket((mirfPacket*)&outPacket) != 0) NOP_ASM
+ ReadDS1820();  //for the first time
  
- memset(buff, 0, sizeof(buff));
+ memset((void*)&outPacket, 0, sizeof(mirfPacket) );
+ //memset(buff, 0, sizeof(buff));
  
  //debug();
  while(1) {
@@ -163,8 +166,8 @@ int main(void)
    {
      Mirf.readPacket((mirfPacket*)&inPacket);
      
-     sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
-     USART_Transmit((char*)buff, strlen((char*)buff) );
+     //sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
+     //USART_Transmit((char*)buff, strlen((char*)buff) );
           
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
 	 {
@@ -216,24 +219,10 @@ int main(void)
         }
   		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
   		{
-  			if (gDallasReady) //sensor found during setup and ready for measurements
-  			{
-  				uint8_t sp[DS18X20_SP_SIZE];
-  				DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
-  				while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
-  				ow_command( DS18X20_READ, NULL );
-  					for ( uint8_t i = 0; i < DS18X20_SP_SIZE; i++ ) {
-  						sp[i] = ow_byte_rd();
-  					}
-  		  		res->len = 2;
-  				res->payload[0] = sp[0];
-  				res->payload[1] = sp[1];
-  				//DS18X20_read_maxres_single( gDallasID[0], &temp_eminus4 );
-  			}
-  			else //sensor was not properly setup, so we have to send error value
-  			{
-  				res->payload[0] = 0xFF; //gDallasID[0];
-  			}
+            //use value stored in memory
+	  		res->len = 2;
+			res->payload[0] = ds1820Temp.lsb;
+			res->payload[1] = ds1820Temp.msb;
   			Mirf.sendPacket((mirfPacket*)&outPacket);
   		}
   		else if (req->for_sensor == 3) //==== voltage of supply battery ====
@@ -255,15 +244,42 @@ int main(void)
    		Mirf.sendPacket((mirfPacket*)&outPacket);
      }
    }
-   else if (longTimer > 3000) //30sec period
+   else if (longTimer > 6000) //60sec period
    {
-   		//test environment temp and if it is over 25 degrees, switch channel 1MHz lower
+   		
    		longTimer = 0;
-   		getAdcVal();
-  	    adcVal = ADCW - 19 - internalTempCalib;
-  	    uint8_t newChann = Mirf.channel;
-  	    if (adcVal > 133) newChann -= 1;	    	
-  	    Mirf.configRegister(RF_CH, newChann);
+        
+        //getAdcVal();
+  	    //adcVal = ADCW - 19 - internalTempCalib;
+        //now we dont use adc value, but the ds1820 value, which is more accurate
+        
+        //refresh temperature measurement
+        ReadDS1820();      		
+        
+        //test environment temp and if it is over 29 degrees, switch channel 1MHz lower
+        //raw value for +26 degrees from ds1820  (temp = val * 0.0625), also sign is tested
+        //NOW NOT USED
+  	    /*
+        uint8_t newChann = Mirf.channel;
+        static uint8_t channel_altered = 0;
+  	    if ( (ds1820Temp.uint > 0x1D0 ) && ((ds1820Temp.msb & 0x80) == 0) )  
+        {
+          if (channel_altered == 0)
+          {
+            newChann -= 1;
+            channel_altered = 1;
+  	        Mirf.configRegister(RF_CH, newChann);
+          }
+        }
+        else
+        {
+          if (channel_altered == 1)
+          {
+            channel_altered = 0;
+  	        Mirf.configRegister(RF_CH, newChann);
+          }        
+        }
+        */                    	    	
    }
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
@@ -275,30 +291,3 @@ int main(void)
 
  return 0;
 }
-
-// void debug(void)
-// {
-//   uint8_t i;
-//   uint8_t volatile rr;
-//   uint8_t adr[5];
-//   
-//   cli();
-//   for (i=0; i< 10; i++)
-//   {
-//     Mirf.readRegister(i, (uint8_t*)&rr, 1);
-//     sprintf(buff, "%d:%d,", i, rr);
-//     USART_Transmit(buff, strlen(buff) );
-//   }
-//   sprintf(buff, "\n");
-//   USART_Transmit(buff, strlen(buff) );
-//   
-//   Mirf.readRegister(TX_ADDR, (uint8_t*)&adr, 5);
-//   sprintf(buff, "TX: 0x%2x%2x%2x%2x%2x\n", adr[0], adr[1], adr[2], adr[3], adr[4]);
-//   USART_Transmit(buff, strlen(buff) );
-// 
-//   Mirf.readRegister(RX_ADDR_P0, (uint8_t*)&adr, 5);
-//   sprintf(buff, "RX: 0x%2x%2x%2x%2x%2x\n", adr[0], adr[1], adr[2], adr[3], adr[4]);
-//   USART_Transmit(buff, strlen(buff) );
-//   
-//   sei();
-// }

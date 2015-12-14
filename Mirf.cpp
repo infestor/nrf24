@@ -17,7 +17,7 @@ void Nrf24l::handleRxLoop(void)
   
   //if (inPacketReady == MAX_RX_PACKET_QUEUE) return;
   //if there is full queue, return a wait for next turn
-   while ( (dataReady()) && (inPacketReady != MAX_RX_PACKET_QUEUE) ) //while something in rx buffer and queue not full
+   while ( dataReady() ) //while something in rx buffer
    {
 	  getData( (uint8_t*) &pendingPacket);
       
@@ -45,11 +45,17 @@ void Nrf24l::handleRxLoop(void)
 		  }
 		  else
 		  { //other packets are saved to queue and app has to hadle them
-			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, payload);
+            if (inPacketReady != MAX_RX_PACKET_QUEUE) //if queue is not full
+            {
+              //last_addr_in = pendingPacket.txAddr;
+              //last_packetCounter_in = pendingPacket.counter;
+                            
+			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
 			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
 			  createAck((mirfPacket*)&pendingPacket);
+            }
 		  }
 	  }
       
@@ -96,7 +102,7 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 
       flushTx();
       //write user packet to fifo       
-      nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, payload);  
+      nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, NRF_PAYLOAD_SIZE);  
       
       if ( 1 ) //getCarrier()==0 ) //no carrier detected (free air/free to send)
       {
@@ -120,6 +126,8 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
         while ( isSending() ) NOP_ASM //wait for end of transfer and immediately start RX mode
       	//powerUpRx(); //when 2 or more packets, we have to wait until fifo is empty (while isSending() )       
       }
+      /*
+      //NOT USED NOW (no carrier detection during sending)
       else  //there is someone already transmitting, wait random time to next try
       {
         TimerNewAttempt = Timer + 1 + (Timer & 7); //little bit randomize (increment also with lowest 2 bits of timer)
@@ -132,9 +140,12 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
       		sendingStatus = WAIT_FREE_AIR;
       	}
       }
+      */
     }
 
-	  //only finite number of attempts to send (when air is full)
+    /*
+    //NOT USED NOW (no carrier detection during sending)
+	//only finite number of attempts to send (when air is full)
     if ((txAttempt == MAX_TX_ATTEMPTS) && (sendingStatus == WAIT_FREE_AIR) ) {
         sendingStatus = 0; //must be set to 0 to be able to send another packets
         sendResult = MAX_ATTEMPTS;
@@ -143,6 +154,7 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
         UDR0 = 88; //DEBUG X
 		#endif
     }
+    */
     
     //check if there was TIMEOUT in waiting for ACK
     if ( (SENDING_STATUS)sendingStatus == WAIT_ACK) //check whether timeout waiting for ack occured
@@ -168,7 +180,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 	//we have to temporarily disable timer0 interrupt because no one else could be able to touch
 	//the packet queue until we are finished
   	cli();
-    memcpy(paket, (const void*)&rxQueue[rxPosBeg], payload);
+    memcpy(paket, (const void*)&rxQueue[rxPosBeg], NRF_PAYLOAD_SIZE);
     inPacketReady--;
     rxPosBeg++;
     if (rxPosBeg == MAX_RX_PACKET_QUEUE) rxPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -193,7 +205,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  memcpy((void*)&txQueue[txPosEnd], paket, payload);
+  memcpy((void*)&txQueue[txPosEnd], paket, NRF_PAYLOAD_SIZE);
 
   txQueueSize++;
   txPosEnd++;
@@ -243,10 +255,9 @@ inline void Nrf24l::removePacketfromAckQueue(void)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 Nrf24l::Nrf24l() {
-	cePin = D9;
-	csnPin = D10;
+	//cePin = D9;
+	//csnPin = D10;
 	channel = 85;
-	payload = sizeof(mirfPacket);
 	spi = &SPI;
 	baseConfig = _BV(EN_CRC) & ~_BV(CRCO);
 }
@@ -279,8 +290,8 @@ void Nrf24l::config()
   configRegister(FEATURE, 0); //dynamic length disabled(1<<EN_DPL) )
   configRegister(DYNPD, 0);
 	// Set length of incoming payload 
-	configRegister(RX_PW_P0, payload);
-	configRegister(RX_PW_P1, payload);
+	configRegister(RX_PW_P0, NRF_PAYLOAD_SIZE);
+	configRegister(RX_PW_P1, NRF_PAYLOAD_SIZE);
   setADDR();
   
 	// Start receiver 
@@ -331,7 +342,7 @@ bool Nrf24l::rxFifoEmpty(){
 void Nrf24l::getData(uint8_t * data) 
 // Reads payload bytes into data array
 {
-	nrfSpiWrite2(R_RX_PAYLOAD, data, true, payload); // Read payload
+	nrfSpiWrite2(R_RX_PAYLOAD, data, true, NRF_PAYLOAD_SIZE); // Read payload
 
 	// NVI: per product spec, p 67, note c:
 	//  "The RX_DR IRQ is asserted by a new packet arrival event. The procedure
@@ -399,7 +410,7 @@ volatile bool Nrf24l::isSending() {
 // 
 // 		if((status & ((1 << TX_DS)  | (1 << MAX_RT)))){
 // 			powerUpRx();
-// 			return false; 
+// 			return false;                                                                                                    
 // 		}
 // 
 // 		return true;
@@ -425,7 +436,7 @@ uint8_t Nrf24l::getStatus(){
 	return rv;
 }
 
-void Nrf24l::flushTx() {
+inline void Nrf24l::flushTx() {
 	nrfSpiWrite(FLUSH_TX);
 	//configRegister(STATUS, _BV(TX_DS));
 }
@@ -494,22 +505,22 @@ void Nrf24l::nrfSpiWrite2(uint8_t reg, uint8_t *data, bool readData, uint8_t len
 	csnHi();
 }
 
-void Nrf24l::ceHi(){    //PB1
+inline void Nrf24l::ceHi(){    //PB1
 	//digitalWrite(cePin,HIGH);
   PORTB |= (1<<1);
 }
 
-void Nrf24l::ceLow(){
+inline void Nrf24l::ceLow(){
 	//digitalWrite(cePin,LOW);
   PORTB &= (~(1<<1));
 }
 
-void Nrf24l::csnHi(){  //PB2
+inline void Nrf24l::csnHi(){  //PB2
 	//digitalWrite(csnPin,HIGH);
   PORTB |= (1<<2);
 }
 
-void Nrf24l::csnLow(){
+inline void Nrf24l::csnLow(){
 	//digitalWrite(csnPin,LOW);
   PORTB &= (~(1<<2));
 }
