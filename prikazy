@@ -1,0 +1,8 @@
+getVal:node:sensor
+getNodeProp:nodeNum
+setSensVal:nodeNum:sensorNum:value
+setInterval:nodeNum:sensorNum:value
+getInterval:nodeNum:sensorNum
+invokeSearch
+isSearching
+getNodeList
