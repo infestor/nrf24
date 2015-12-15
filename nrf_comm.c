@@ -10,6 +10,9 @@
 
 #define DEV_ADDR 2 //1 is master, so it is not possible
 
+#define TIMER_3_SEC_PERIOD 3000
+#define TIMER_60_SEC_PERIOD 60000
+
 #include "onewire.h"
 #include "ds18x20.h"
 
@@ -36,7 +39,7 @@ uint16_t volatile longTimer;
 
 #define LOW_POWER_ENABLE 1
 #ifdef LOW_POWER_ENABLE
- #define LOW_POWER_CYCLES 8
+ #define LOW_POWER_CYCLES 8 //interval = this_number * 8sec
  uint8_t volatile wdt_timer;
  uint8_t volatile low_power_mode = 0;
  #undef SENSOR_2_TYPE
@@ -270,6 +273,19 @@ int main(void)
 			res->payload[0] = ds1820Temp.lsb;
 			res->payload[1] = ds1820Temp.msb;
   			Mirf.sendPacket((mirfPacket*)&outPacket);
+            
+            #ifdef LOW_POWER_ENABLE
+                //if we are in low power mode, after first response to request for this sensor
+                //wait until the packet is really sent and then
+                //increase long timer, so in next while loop it will jump right into power down mode,
+                //even if whole interval (3sec) didnt elapse yet
+                //this should save some power
+                //but limit this feature only on SUCCESSFUL sending of packet 
+                while (Mirf.sendResult == 1) NOP_ASM
+                if (Mirf.sendResult == 0) { //was it succesfull send?
+                    longTimer += TIMER_3_SEC_PERIOD;
+                }
+            #endif
   		}
   		else if (req->for_sensor == 3) //==== voltage of supply battery ====
   		{ //it is 2 cells in series, so there will be divider /2 on the input (real voltage would be 2x)
@@ -291,7 +307,7 @@ int main(void)
      }
    }
 #ifdef LOW_POWER_ENABLE 
-   else if (longTimer > 3000) //3sec period awake (only)
+   else if (longTimer > TIMER_3_SEC_PERIOD) //3sec period awake (only)
    {
    		longTimer = 0;
         //temperature measurement is refreshed during end of low power mode
@@ -309,7 +325,7 @@ int main(void)
         sleep_cpu();
     }
 #else    
-   else if (longTimer > 60000) //60sec period
+   else if (longTimer > TIMER_60_SEC_PERIOD) //60sec period
    {
    		longTimer = 0;
         
