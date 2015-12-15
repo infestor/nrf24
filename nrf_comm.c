@@ -8,7 +8,7 @@
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
 
-#define DEV_ADDR 2
+#define DEV_ADDR 2 //1 is master, so it is not possible
 
 #include "onewire.h"
 #include "ds18x20.h"
@@ -17,6 +17,7 @@
 #define SWITCHED_PIN 9
 #define SENSOR_0_CALIB_ADDR (uint8_t *)1
 
+#define LOW_POWER_SENSOR_TYPE_FLAG 128 //is added to value of DS1820 sensor to sign, that this is a low power device
 #define SENSOR_0_TYPE 3 //internal temp
 #define SENSOR_1_TYPE 0 //on-off output
 #define SENSOR_2_TYPE 4 //dallas 18b20 temp sensor
@@ -25,14 +26,22 @@
 #define MAXSENSORS 1
 //uint8_t gDallasID[OW_ROMCODE_SIZE];
 
-
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
 //char buff[30];
 uint8_t internalTempCalib;
-uint8_t sendResult;
-uint16_t longTimer;
+volatile uint8_t sendResult;
+uint16_t volatile longTimer;
+
+#define LOW_POWER_ENABLE 1
+#ifdef LOW_POWER_ENABLE
+ #define LOW_POWER_CYCLES 8
+ uint8_t volatile wdt_timer;
+ uint8_t volatile low_power_mode = 0;
+ #undef SENSOR_2_TYPE
+ #define SENSOR_2_TYPE 4 + LOW_POWER_SENSOR_TYPE_FLAG //dallas 18b20 temp sensor + low power sign 
+#endif
 
 typedef union {
   uint16_t uint;
@@ -70,8 +79,16 @@ ISR(BADISR_vect) { //just for case
 }
 
 ISR(ADC_vect) {
-	  SMCR = 0; //disable sleep and enable normal Idle mode
+	  SMCR = 0; //disable adc sleep and enable normal Idle mode
 }
+
+// WATCHDOG interrupt (for cyclic waking of low power device)
+#ifdef LOW_POWER_ENABLE
+ISR(WDT_vect)
+{
+    wdt_timer++;
+}
+#endif
 
 void ReadDS1820(void)
 {
@@ -95,6 +112,7 @@ void ReadDS1820(void)
 }
 
 //======================================================
+//WARNING: adc MUX and reference must be set before calling this
 void getAdcVal(void)
 {
 	  SMCR = 2; //enable ADC noise reduct sleep mode
@@ -105,6 +123,7 @@ void getAdcVal(void)
 
 	  // Reading register "ADCW" takes care of how to read ADCL and ADCH.
 	  //adcVal = ADCW;
+      //info: adcw is read outside - just right after finishing this function
 }
 
 //======================================================
@@ -151,7 +170,7 @@ void setup()
 //======================================================
 int main(void)
 {
- wdt_disable();
+ wdt_disable();   
 
  setup();
  ReadDS1820();  //for the first time
@@ -161,6 +180,33 @@ int main(void)
  
  //debug();
  while(1) {
+
+    #ifdef LOW_POWER_ENABLE 
+    //low power mode driven by watchdog resets - loop trap
+    if (low_power_mode == 1)
+    {
+        if (wdt_timer == LOW_POWER_CYCLES) { //sleep mode elapsed, turn off and go to normal mode
+            SMCR = 0; //power down mode = off
+            WDTCSR = (1<<WDCE) | (1<<WDE);    
+            WDTCSR = 0; //wdt = off
+            wdt_timer = 0;
+            low_power_mode = 0;
+            ReadDS1820(); //refresh temperature measurement
+            Mirf.powerUpRx(); //enable receiver
+            TIFR0 = 2; //delete possible interrupt flag of timer0      
+            TIMSK0 = 2; //activate interrupts for timer0
+        }
+        else {  //continue with sleep mode
+            WDTCSR |= (1<<WDIE); //interrupt enable flag is atomatically cleared by interrupt for watchdog, must be refreshed
+            SMCR = 0b00000100; //power down sleep mode                       		
+            sleep_enable();
+            sleep_cpu();      
+        }
+
+        continue;
+    }
+    #endif
+    
    //zpracovat prichozi packet
    if (Mirf.inPacketReady)
    {
@@ -244,43 +290,33 @@ int main(void)
    		Mirf.sendPacket((mirfPacket*)&outPacket);
      }
    }
-   else if (longTimer > 6000) //60sec period
+#ifdef LOW_POWER_ENABLE 
+   else if (longTimer > 3000) //3sec period awake (only)
    {
-   		
+   		longTimer = 0;
+        //temperature measurement is refreshed during end of low power mode
+         
+        // ENTER POWER DOWN MODE - watchdog timed refresh
+        TIMSK0 = 0; // turn off 10ms timer (by disabling its interrupt)
+        SMCR = 0b00000100; //power down sleep mode
+        WDTCSR = (1<<WDCE) | (1<<WDE) | (1<<WDP3) | (1<<WDP0);    
+        WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0); //8sec timeout of watchdog
+        wdt_timer = 0;
+        low_power_mode = 1;
+        Mirf.powerDown();
+                     		
+        sleep_enable();
+        sleep_cpu();
+    }
+#else    
+   else if (longTimer > 60000) //60sec period
+   {
    		longTimer = 0;
         
-        //getAdcVal();
-  	    //adcVal = ADCW - 19 - internalTempCalib;
-        //now we dont use adc value, but the ds1820 value, which is more accurate
-        
         //refresh temperature measurement
-        ReadDS1820();      		
-        
-        //test environment temp and if it is over 29 degrees, switch channel 1MHz lower
-        //raw value for +26 degrees from ds1820  (temp = val * 0.0625), also sign is tested
-        //NOW NOT USED
-  	    /*
-        uint8_t newChann = Mirf.channel;
-        static uint8_t channel_altered = 0;
-  	    if ( (ds1820Temp.uint > 0x1D0 ) && ((ds1820Temp.msb & 0x80) == 0) )  
-        {
-          if (channel_altered == 0)
-          {
-            newChann -= 1;
-            channel_altered = 1;
-  	        Mirf.configRegister(RF_CH, newChann);
-          }
-        }
-        else
-        {
-          if (channel_altered == 1)
-          {
-            channel_altered = 0;
-  	        Mirf.configRegister(RF_CH, newChann);
-          }        
-        }
-        */                    	    	
+        ReadDS1820();  	
    }
+#endif   
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
 	  sleep_enable();

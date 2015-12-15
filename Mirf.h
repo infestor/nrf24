@@ -17,11 +17,11 @@ const char mirf_ADDR[] = "honza";
 #define ADDR_TYPE uint8_t
 #define MULTICAST_ADDR 0xFF //for uint16 0xffff;
 
-#define MAX_RX_PACKET_QUEUE 10
+#define MAX_RX_PACKET_QUEUE 8
 #define MAX_TX_PACKET_QUEUE 1
-#define MAX_ACK_PACKET_QUEUE 6
+#define MAX_ACK_PACKET_QUEUE 8
 #define MAX_TX_ATTEMPTS 4
-#define MAX_ACK_WAIT_TIME 5 //25
+#define MAX_ACK_WAIT_TIME 3 //25
 #define NOP_ASM __asm__("nop\n\t");
 
 typedef struct {
