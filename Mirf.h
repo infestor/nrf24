@@ -12,7 +12,7 @@
 
 // Nrf24l settings
 
-#define mirf_ADDR_LEN	3 //5
+#define mirf_ADDR_LEN	5 //5
 const char mirf_ADDR[] = "honza";
 #define ADDR_TYPE uint8_t
 #define MULTICAST_ADDR 0xFF //for uint16 0xffff;

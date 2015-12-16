@@ -16,9 +16,14 @@
 #include "onewire.h"
 #include "ds18x20.h"
 
-#define NUM_SENSORS 4
 #define SWITCHED_PIN 9
 #define SENSOR_0_CALIB_ADDR (uint8_t *)1
+
+#if DEV_ADDR==2
+    #define NUM_SENSORS 3
+#else
+    #define NUM_SENSORS 4
+#endif
 
 #define LOW_POWER_SENSOR_TYPE_FLAG 128 //is added to value of DS1820 sensor to sign, that this is a low power device
 #define SENSOR_0_TYPE 3 //internal temp
