@@ -8,10 +8,18 @@
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
 
+//DEVICE ADDRESS definition
 #define DEV_ADDR 2 //1 is master, so it is not possible
+#ifndef DEV_ADDR
+    #error "Device(node) address is not defined! Use DEV_ADDR macro."
+#else
+    #if DEV_ADDR < 2
+        #error "This is not master node - address below 2 is not permitted!"
+    #endif
+#endif
 
-#define TIMER_3_SEC_PERIOD 3000
-#define TIMER_60_SEC_PERIOD 60000
+#define TIMER_3_SEC_PERIOD 300
+#define TIMER_60_SEC_PERIOD 6000
 
 #include "onewire.h"
 #include "ds18x20.h"
@@ -172,7 +180,6 @@ void setup()
   //disable unused peripherials
   PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) ) ;
   
-  sei();
 }
 
 //======================================================
@@ -182,6 +189,8 @@ int main(void)
 
  setup();
  ReadDS1820();  //for the first time
+
+ sei();
  
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
  //memset(buff, 0, sizeof(buff));
