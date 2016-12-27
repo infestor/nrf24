@@ -17,10 +17,11 @@ const char mirf_ADDR[] = "honza";
 #define ADDR_TYPE uint8_t
 #define MULTICAST_ADDR 0xFF //for uint16 0xffff;
 
-#define MAX_RX_PACKET_QUEUE 8
+#define DEFAULT_RF_CHANNEL 120
+#define MAX_RX_PACKET_QUEUE 6
 #define MAX_TX_PACKET_QUEUE 1
 #define MAX_ACK_PACKET_QUEUE 8
-#define MAX_TX_ATTEMPTS 4
+#define MAX_TX_ATTEMPTS 3
 #define MAX_ACK_WAIT_TIME 3 //25
 #define NOP_ASM __asm__("nop\n\t");
 
@@ -43,8 +44,12 @@ class Nrf24l {
 	void init();
 	void config();
 	//void send(uint8_t *value);
+	void setRfChannel(uint8_t new_channel);
+	uint8_t getRfChannel(void);
+
 	void setADDR(void);
     void setDevAddr(ADDR_TYPE);
+    
 	bool dataReady();
 	volatile bool isSending();
 	bool rxFifoEmpty();
@@ -102,6 +107,7 @@ class Nrf24l {
 		 * Channel 0 - 127 or 0 - 84 in the US.
 		 */
 		uint8_t channel;
+		//set by first call to setRfChannel() from config()
 
 		/**
 		 * The base config register.

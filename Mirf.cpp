@@ -257,7 +257,6 @@ inline void Nrf24l::removePacketfromAckQueue(void)
 Nrf24l::Nrf24l() {
 	//cePin = D9;
 	//csnPin = D10;
-	channel = 85;
 	spi = &SPI;
 	baseConfig = _BV(EN_CRC) & ~_BV(CRCO);
 }
@@ -285,7 +284,7 @@ void Nrf24l::config()
   configRegister(EN_RXADDR, (1 << ERX_P0) ); //only pipe 0 receive enabled
   configRegister(SETUP_AW, 1); //hw address width - 5bytes
   configRegister(SETUP_RETR, 0); //auto retransmission off
-	configRegister(RF_CH, channel);  // Set RF channel
+  setRfChannel(DEFAULT_RF_CHANNEL);  // Set RF channel
   configRegister(RF_SETUP,  0b00100111 ); //0b00100111 );  //250kbit, 0dbm, max gain
   configRegister(FEATURE, 0); //dynamic length disabled(1<<EN_DPL) )
   configRegister(DYNPD, 0);
@@ -297,6 +296,17 @@ void Nrf24l::config()
 	// Start receiver 
 	flushRx();
 	powerUpRx();
+}
+
+void Nrf24l::setRfChannel(uint8_t new_channel)
+{
+	channel = new_channel;
+	configRegister(RF_CH, new_channel);  // Set RF channel
+}
+
+inline uint8_t Nrf24l::getRfChannel(void)
+{
+	return channel;
 }
 
 void Nrf24l::setDevAddr(ADDR_TYPE addr)

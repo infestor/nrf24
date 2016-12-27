@@ -8,8 +8,10 @@
 #include "Mirf.h"
 #include "Mirf_nRF24L01.h"
 
-//DEVICE ADDRESS definition
+//DEVICE definition
 #define DEV_ADDR 2 //1 is master, so it is not possible
+#define LOW_POWER_ENABLE 1
+
 #ifndef DEV_ADDR
     #error "Device(node) address is not defined! Use DEV_ADDR macro."
 #else
@@ -50,7 +52,6 @@ uint8_t internalTempCalib;
 volatile uint8_t sendResult;
 uint16_t volatile longTimer;
 
-#define LOW_POWER_ENABLE 1
 #ifdef LOW_POWER_ENABLE
  #define LOW_POWER_CYCLES 8 //interval = this_number * 8sec
  uint8_t volatile wdt_timer;
