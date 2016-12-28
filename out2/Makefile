@@ -9,9 +9,9 @@ TARGET = nrf_comm_master.elf
 CESTA=/usr/local/CrossPack-AVR/bin/
 #CESTA = 
 #CC = $(CESTA)avr-g++
-CC = $(CESTA)avr-c++
+CC = $(CESTA)avr-g++
 
-CPP = $(CESTA)avr-c++
+CPP = $(CESTA)avr-g++
 
 ## Options common to compile, link and assembly rules
 COMMON = -mmcu=$(MCU)
@@ -44,7 +44,7 @@ INCLUDES =
 
 ## Library Directories
 #LIBDIRS = -L"C:\WinAVR-20100110\avr\lib" 
-#LIBDIRS = -L"/usr/local/CrossPack-AVR/avr/lib/"
+LIBDIRS = -L"/usr/local/CrossPack-AVR/avr/lib/"
 
 ## Objects that must be built in order to link
 OBJECTS = nrf_comm_master.o Mirf.o spilib.o 

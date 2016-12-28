@@ -8,13 +8,13 @@ MCU = atmega328p
 PRIPONA = .elf
 TARGET = nrf_comm.elf
 TARGET_MASTER = nrf_comm_master.elf
-## CESTA=/usr/local/CrossPack-AVR/bin/
-CESTA="C:/WinAVR-20100110\\bin\\"
+CESTA=/usr/local/CrossPack-AVR/bin/
+#CESTA="C:/WinAVR-20100110\\bin\\"
 #CESTA =
 #CC = $(CESTA)avr-g++
-CC = $(CESTA)avr-c++
+CC = $(CESTA)avr-g++
 
-CPP = $(CESTA)avr-c++
+CPP = $(CESTA)avr-g++
 
 ## Options common to compile, link and assembly rules
 COMMON = -mmcu=$(MCU)
@@ -43,12 +43,12 @@ HEX_EEPROM_FLAGS += --set-section-flags=.eeprom="alloc,load"
 HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 
 ## Include Directories
-INCLUDES = -I"C:/WinAVR-20100110/avr/include" -I"C:/Honza/_nrf24l01"
-#INCLUDES = 
+#INCLUDES = -I"C:/WinAVR-20100110/avr/include" -I"C:/Honza/_nrf24l01"
+INCLUDES = 
 
 ## Library Directories
-LIBDIRS = -L"C:/WinAVR-20100110/avr/lib" 
-#LIBDIRS =
+#LIBDIRS = -L"C:/WinAVR-20100110/avr/lib" 
+LIBDIRS =
 
 ## Objects that must be built in order to link
 OBJECTS = nrf_comm.o arduino_simple.o Mirf.o spilib.o onewire.o ds18x20.o
