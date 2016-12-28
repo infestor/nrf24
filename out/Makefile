@@ -10,11 +10,9 @@ TARGET = nrf_comm.elf
 TARGET_MASTER = nrf_comm_master.elf
 CESTA=/usr/local/CrossPack-AVR/bin/
 #CESTA="C:/WinAVR-20100110\\bin\\"
-CESTA =
+#CESTA =
 CC = $(CESTA)avr-g++
-#CC = $(CESTA)avr-c++
-
-CPP = $(CESTA)avr-c++
+CPP = $(CESTA)avr-g++
 
 ## Options common to compile, link and assembly rules
 COMMON = -mmcu=$(MCU)
