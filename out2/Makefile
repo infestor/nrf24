@@ -8,9 +8,9 @@ MCU = atmega328p
 TARGET = nrf_comm_master.elf
 CESTA=/usr/local/CrossPack-AVR/bin/
 #CESTA = 
+
 #CC = $(CESTA)avr-g++
 CC = $(CESTA)avr-g++
-
 CPP = $(CESTA)avr-g++
 
 ## Options common to compile, link and assembly rules
@@ -18,8 +18,9 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
-CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
+CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
+CFLAGS += -fdata-sections -ffunction-sections
+#CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 #CFLAGS += -D_DEBUG_ 
 
 ## Assembly specific flags
@@ -28,8 +29,8 @@ ASMFLAGS += $(CFLAGS)
 ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 
 ## Linker flags
-LDFLAGS = $(COMMON)
-LDFLAGS +=  -Wl,-u,vfprintf,-Map=nrf_comm_master.map
+LDFLAGS = $(COMMON) -dead_strip -Wl,--gc-sections 
+LDFLAGS +=  -Wl,-u,vfprintf
 
 ## Intel Hex file production flags
 HEX_FLASH_FLAGS = -R .eeprom -R .fuse -R .lock -R .signature
@@ -44,11 +45,11 @@ INCLUDES =
 
 ## Library Directories
 #LIBDIRS = -L"C:\WinAVR-20100110\avr\lib" 
-LIBDIRS = -L"/usr/local/CrossPack-AVR/avr/lib/"
+#LIBDIRS = -L"/usr/local/CrossPack-AVR/avr/lib"
+LIBDIRS =
 
 ## Objects that must be built in order to link
-OBJECTS = nrf_comm_master.o Mirf.o spilib.o 
-#OBJECTS += arduino_simple.o
+OBJECTS = nrf_comm_master.o Mirf.o spilib.o arduino_simple.o
 
 ## Objects explicitly added by the user
 LIBS = -lprintf_flt -lm
@@ -57,7 +58,7 @@ LIBS = -lprintf_flt -lm
 all: clean $(TARGET) nrf_comm_master.hex nrf_comm_master.eep nrf_comm_master.lss avr-size
 	
 touch:	
-	touch ../nrf_comm.c
+	touch ../nrf_comm_master.c
 	
 ## Compile
 nrf_comm_master.o: ../nrf_comm_master.c
@@ -95,5 +96,5 @@ clean:
 
 
 ## Other dependencies
--include $(shell mkdir dep 2>NUL) $(wildcard dep/*)
+#-include $(shell mkdir dep 2>NUL) $(wildcard dep/*)
 

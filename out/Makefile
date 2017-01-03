@@ -19,7 +19,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d -fdata-sections -ffunction-sections
 
 ## Assembly specific flags
@@ -30,8 +30,6 @@ ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 ## Linker flags
 LDFLAGS = $(COMMON) -dead_strip -Wl,--gc-sections 
 LDFLAGS +=  -Wl,-Map=nrf_comm.map
-LDFLAGS_MASTER = $(COMMON)
-LDFLAGS_MASTER +=  -Wl,-Map=nrf_comm_master.map
 
 ## Intel Hex file production flags
 HEX_FLASH_FLAGS = -R .eeprom -R .fuse -R .lock -R .signature

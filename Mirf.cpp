@@ -282,10 +282,11 @@ void Nrf24l::config()
 {	
   configRegister(EN_AA, 0); //disable auto ack
   configRegister(EN_RXADDR, (1 << ERX_P0) ); //only pipe 0 receive enabled
-  configRegister(SETUP_AW, 1); //hw address width - 5bytes
+  configRegister(SETUP_AW, mirf_ADDR_LEN - 2); //hw address width - mirf_ADDR_LEN bytes
+  //here -2 is for normalising the value (1=3 bytes, 2=4bytes, 3=5bytes; so
   configRegister(SETUP_RETR, 0); //auto retransmission off
   setRfChannel(DEFAULT_RF_CHANNEL);  // Set RF channel
-  configRegister(RF_SETUP,  0b00100111 ); //0b00100111 );  //250kbit, 0dbm, max gain
+  configRegister(RF_SETUP,  0b00100111 ); //250kbit, 0dbm, max gain
   configRegister(FEATURE, 0); //dynamic length disabled(1<<EN_DPL) )
   configRegister(DYNPD, 0);
 	// Set length of incoming payload 
@@ -298,7 +299,7 @@ void Nrf24l::config()
 	powerUpRx();
 }
 
-void Nrf24l::setRfChannel(uint8_t new_channel)
+inline void Nrf24l::setRfChannel(uint8_t new_channel)
 {
 	channel = new_channel;
 	configRegister(RF_CH, new_channel);  // Set RF channel
