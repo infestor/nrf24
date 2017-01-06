@@ -41,9 +41,6 @@
 #define SENSOR_2_TYPE 4 //dallas 18b20 temp sensor
 #define SENSOR_3_TYPE 6 //2 lion in series supply
 
-#define MAXSENSORS 1
-//uint8_t gDallasID[OW_ROMCODE_SIZE];
-
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
@@ -209,8 +206,9 @@ int main(void)
             WDTCSR = 0; //wdt = off
             wdt_timer = 0;
             low_power_mode = 0;
+            //enable Mirf receiver - run before reading DS1820 enables to catch incoming packet(s) during temp read
+            Mirf.powerUpRx();
             ReadDS1820(); //refresh temperature measurement
-            Mirf.powerUpRx(); //enable receiver
             TIFR0 = 2; //delete possible interrupt flag of timer0      
             TIMSK0 = 2; //activate interrupts for timer0
         }
