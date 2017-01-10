@@ -31,7 +31,7 @@ CFLAGS += -fdata-sections -ffunction-sections
 ## Linker flags
 LDFLAGS = $(COMMON) -dead_strip
 LDFLAGS += -Wl,--gc-sections 
-LDFLAGS += -Wl,-u,vfprintf
+LDFLAGS_MASTER = -Wl,-u,vfprintf
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
 ## Objects explicitly added by the user
@@ -68,37 +68,38 @@ ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 ## ==================================================================
 ## BUILD
 ## ==================================================================
-all: $(TARGET) $(TARGET_MASTER) nrf_comm.hex nrf_comm_master.hex nrf_comm.lss avr-size
+all: $(TARGET) $(TARGET_MASTER) nrf_comm.hex nrf_comm_master.hex nrf_comm.lss nrf_comm.size nrf_comm_master.size
 	
 ## Compile
-$(OUTDIR)/%.o: %.c *.h
+$(OUTDIR)/%.o: %.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c -o $@ $<
+
+$(OUTDIR)/%.o: %.cpp
 	$(CC) $(INCLUDES) $(CFLAGS) -c -o $@ $<
 
 ##Link
 $(TARGET): $(OBJ_PATH)
-	$(CC) $(LDFLAGS) $(OBJ_PATH) $(LIBDIRS) $(LIBS) -o $(OUTDIR)/$(TARGET)
+	$(CC) $(LDFLAGS) $(OBJ_PATH) $(LIBDIRS) -o $(OUTDIR)/$(TARGET)
 
 $(TARGET_MASTER): $(OBJ_PATH_MASTER)
-	$(CC) $(LDFLAGS) $(OBJ_PATH_MASTER) $(LIBDIRS) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
+	$(CC) $(LDFLAGS) $(LDFLAGS_MASTER) $(OBJ_PATH_MASTER) $(LIBDIRS) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
 
-%.hex: $(TARGET)
-	$(CESTA)avr-objcopy -O ihex $(HEX_FLASH_FLAGS)  $< $@
+%.hex: %.elf
+	$(CESTA)avr-objcopy -O ihex $(HEX_FLASH_FLAGS)  $(OUTDIR)/$< $(OUTDIR)/$@
 
-%.eep: $(TARGET)
+%.eep: %.elf
 	$(CESTA)avr-objcopy $(HEX_EEPROM_FLAGS) -O ihex $< $@ || exit 0
 
-%.lss: $(TARGET)
-	$(CESTA)avr-objdump -h -S $< > $@
+%.lss: %.elf
+	$(CESTA)avr-objdump -h -S $(OUTDIR)/$< > $(OUTDIR)/$@
 
-avr-size: %.hex
-	$(CESTA)avr-size --mcu=$(MCU) --format=avr $(TARGET)
+%.size: %.elf
+	$(CESTA)avr-size --mcu=$(MCU) --format=avr $(OUTDIR)/$<
 
 ## Clean target
 .PHONY: clean
 clean:
-	cd $(OUTDIR)
-	-rm -rf $(TARGET)  $(TARGET_MASTER) dep/* *.o *.hex *.eep *.lss *.map
-	cd ..
+	rm -rf $(OUTDIR)/$(TARGET) $(OUTDIR)/$(TARGET_MASTER) $(OUTDIR)/dep/* $(OUTDIR)/*.o $(OUTDIR)/*.hex $(OUTDIR)/*.eep $(OUTDIR)/*.lss $(OUTDIR)/*.map
 
 ## Other dependencies
 #-include $(shell mkdir dep 2>NUL) $(wildcard dep/*)
