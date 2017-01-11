@@ -44,7 +44,7 @@ LDFLAGS += -Wl,--gc-sections
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
 #when the RELAX is activated, it will stop working
-LDFLAGS_NODE += -Wl,--relax
+#LDFLAGS_NODE += -Wl,--relax
 LDFLAGS_MASTER = -Wl,-u,vfprintf
 
 ## Objects explicitly added by the user
@@ -84,10 +84,17 @@ ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 all: $(TARGET) $(TARGET_MASTER) nrf_comm.hex nrf_comm_master.hex nrf_comm.lss nrf_comm.size nrf_comm_master.size
 	
 ## Compile
+BUILD_C = $(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
+
 $(OUTDIR)/%.o: %.c $(DEPDIR)/%.d
-	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
+	$(BUILD_C)
 	$(POSTCOMPILE)
 
+$(OUTDIR)/%.o: %.cpp $(DEPDIR)/%.d
+	$(BUILD_C)
+	$(POSTCOMPILE)
+
+## special experiment to build whole program
 NODE_SOURCES = arduino_simple.c spilib.c nrf_comm.c onewire.c ds18x20.c Mirf.cpp
  
 mazec:
@@ -97,10 +104,6 @@ mazec:
 mazec2:
 	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program $(LDFLAGS) $(LDFLAGS_MASTER) $(LIBDIRS) $(filter-out nrf_comm.c,$(SRCS)) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
 	$(MAKE) nrf_comm_master.hex
-
-$(OUTDIR)/%.o: %.cpp $(DEPDIR)/%.d
-	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
-	$(POSTCOMPILE)
 
 ##Link
 $(TARGET): $(OBJ_PATH)
