@@ -10,6 +10,8 @@ TARGET = nrf_comm.elf
 TARGET_MASTER = nrf_comm_master.elf
 
 OUTDIR=bin
+$(shell mkdir -p $(OUTDIR) >/dev/null)
+
 #CESTA=/usr/local/CrossPack-AVR/bin/
 #CESTA="C:/WinAVR-20100110\\bin\\"
 CESTA =
@@ -26,7 +28,12 @@ CFLAGS = $(COMMON)
 CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
 CFLAGS += -fdata-sections -ffunction-sections
-#CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d
+
+# handling header file dependency
+DEPDIR := $(OUTDIR)/dep
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+DEPFLAGS = -MMD -MP -MT $@ -MF $(DEPDIR)/$*.Td
+POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
 LDFLAGS = $(COMMON) -dead_strip
@@ -71,11 +78,13 @@ ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 all: $(TARGET) $(TARGET_MASTER) nrf_comm.hex nrf_comm_master.hex nrf_comm.lss nrf_comm.size nrf_comm_master.size
 	
 ## Compile
-$(OUTDIR)/%.o: %.c
-	$(CC) $(INCLUDES) $(CFLAGS) -c -o $@ $<
+$(OUTDIR)/%.o: %.c $(DEPDIR)/%.d
+	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
+	$(POSTCOMPILE)
 
-$(OUTDIR)/%.o: %.cpp
-	$(CC) $(INCLUDES) $(CFLAGS) -c -o $@ $<
+$(OUTDIR)/%.o: %.cpp $(DEPDIR)/%.d
+	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
+	$(POSTCOMPILE)
 
 ##Link
 $(TARGET): $(OBJ_PATH)
@@ -99,7 +108,12 @@ $(TARGET_MASTER): $(OBJ_PATH_MASTER)
 ## Clean target
 .PHONY: clean
 clean:
-	rm -rf $(OUTDIR)/$(TARGET) $(OUTDIR)/$(TARGET_MASTER) $(OUTDIR)/dep/* $(OUTDIR)/*.o $(OUTDIR)/*.hex $(OUTDIR)/*.eep $(OUTDIR)/*.lss $(OUTDIR)/*.map
+	rm -rf $(OUTDIR)/$(TARGET) $(OUTDIR)/$(TARGET_MASTER) $(DEPDIR)/*.d $(OUTDIR)/*.o $(OUTDIR)/*.hex $(OUTDIR)/*.eep $(OUTDIR)/*.lss $(OUTDIR)/*.map
 
 ## Other dependencies
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
+
 #-include $(shell mkdir dep 2>NUL) $(wildcard dep/*)
+SRCS = $(wildcard *.c) $(wildcard *.cpp)
+-include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS)))

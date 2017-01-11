@@ -4,4 +4,5 @@
 *.hex
 *.obj
 *.map
-
+*.eep
+dep
