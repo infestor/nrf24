@@ -157,16 +157,10 @@ void main(void)
  setup();
 
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
- outPacket.txAddr = DEV_ADDR; //but this should be filled during sending packet
- outPacket.rxAddr = 2;
- outPacket.type = (PACKET_TYPE)REQUEST;
- ((payloadRequestStruct *)&outPacket.payload)->cmd = READ;
- ((payloadRequestStruct *)&outPacket.payload)->len = 0;
- ((payloadRequestStruct *)&outPacket.payload)->for_sensor = 0;
 
  sprintf(buff, "COMM MASTER\n");
  USART_Transmit(buff, strlen(buff) );
-      
+
  //------------------------------------
  while(1) {
 	 //zpracovat prichozi packet

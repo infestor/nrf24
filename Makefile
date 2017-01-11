@@ -25,8 +25,10 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -g -gdwarf-2 -DF_CPU=16000000UL -O2
-CFLAGS += -ffreestanding -fno-tree-scev-cprop -mcall-prologues 
+CFLAGS += -Wall -g -gdwarf-2 -DF_CPU=16000000UL -O1
+CFLAGS += -ffreestanding
+CFLAGS += -fno-tree-scev-cprop
+CFLAGS += -mcall-prologues 
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
 CFLAGS += -fdata-sections -ffunction-sections
 
@@ -39,9 +41,11 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 ## Linker flags
 LDFLAGS = $(COMMON)
 LDFLAGS += -Wl,--gc-sections
-LDFLAGS += -Wl,--relax
-LDFLAGS_MASTER = -Wl,-u,vfprintf
 #LDFLAGS += -Wl,-Map=nrf_comm.map
+
+#when the RELAX is activated, it will stop working
+LDFLAGS_NODE += -Wl,--relax
+LDFLAGS_MASTER = -Wl,-u,vfprintf
 
 ## Objects explicitly added by the user
 LIBS = -lprintf_flt -lm
@@ -84,13 +88,23 @@ $(OUTDIR)/%.o: %.c $(DEPDIR)/%.d
 	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
 	$(POSTCOMPILE)
 
+NODE_SOURCES = arduino_simple.c spilib.c nrf_comm.c onewire.c ds18x20.c Mirf.cpp
+ 
+mazec:
+	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program $(LDFLAGS) $(LIBDIRS) $(NODE_SOURCES) -o $(OUTDIR)/$(TARGET)
+	$(MAKE) nrf_comm.hex
+
+mazec2:
+	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program $(LDFLAGS) $(LDFLAGS_MASTER) $(LIBDIRS) $(filter-out nrf_comm.c,$(SRCS)) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
+	$(MAKE) nrf_comm_master.hex
+
 $(OUTDIR)/%.o: %.cpp $(DEPDIR)/%.d
 	$(CC) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
 	$(POSTCOMPILE)
 
 ##Link
 $(TARGET): $(OBJ_PATH)
-	$(CC) $(LDFLAGS) $(OBJ_PATH) $(LIBDIRS) -o $(OUTDIR)/$(TARGET)
+	$(CC) $(LDFLAGS) $(LDFLAGS_NODE) $(OBJ_PATH) $(LIBDIRS) -o $(OUTDIR)/$(TARGET)
 
 $(TARGET_MASTER): $(OBJ_PATH_MASTER)
 	$(CC) $(LDFLAGS) $(LDFLAGS_MASTER) $(OBJ_PATH_MASTER) $(LIBDIRS) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)

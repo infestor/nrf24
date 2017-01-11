@@ -36,6 +36,13 @@ typedef struct {
 
 #define NRF_PAYLOAD_SIZE sizeof(mirfPacket)
 
+/*
+#define ceHi() PORTB |= (1<<1)
+#define ceLow() PORTB &= (~(1<<1))
+#define csnHi() PORTB |= (1<<2)
+#define csnLow() PORTB &= (~(1<<2))
+*/
+
 //==========================================================================
 class Nrf24l {
 	public:
@@ -76,15 +83,15 @@ class Nrf24l {
 	void powerUpRx();
 	void powerUpTx();
 	void powerDown();
-		
+
 	void nrfSpiWrite(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
 	void nrfSpiWrite2(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
-  
-	void csnHi();
-	void csnLow();
-	void ceHi();
-	void ceLow();
-    
+
+	__attribute__((noinline)) void csnHi();
+	__attribute__((noinline)) void csnLow();
+	__attribute__((noinline)) void ceHi();
+	__attribute__((noinline)) void ceLow();
+
     //-----------------------------------------------------------------------
     //------------------ Variables ------------------------------------------
     //--- setup values ------------------------------------------------------
