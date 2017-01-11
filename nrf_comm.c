@@ -181,7 +181,7 @@ void setup()
 }
 
 //======================================================
-int main(void)
+void main(void) __attribute__ ((noreturn));
 {
  wdt_disable();   
 
@@ -355,5 +355,4 @@ int main(void)
    }
  }
 
- return 0;
 }

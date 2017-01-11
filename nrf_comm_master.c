@@ -149,7 +149,7 @@ void setup()
   sei();
 }
 
-int main(void)
+void main(void) __attribute__ ((noreturn));
 {
  wdt_disable();
  setup();
@@ -222,5 +222,4 @@ int main(void)
 
  }
 
- return 0;
 }

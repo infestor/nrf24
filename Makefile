@@ -25,7 +25,8 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -DF_CPU=16000000UL -O1
+CFLAGS += -Wall -g -gdwarf-2 -DF_CPU=16000000UL -O2
+CFLAGS += -ffreestanding -fno-tree-scev-cprop -mcall-prologues 
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
 CFLAGS += -fdata-sections -ffunction-sections
 
@@ -37,7 +38,8 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
 LDFLAGS = $(COMMON)
-LDFLAGS += -Wl,--gc-sections 
+LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,--relax
 LDFLAGS_MASTER = -Wl,-u,vfprintf
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
