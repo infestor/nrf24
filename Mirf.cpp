@@ -516,22 +516,22 @@ void Nrf24l::nrfSpiWrite2(uint8_t reg, uint8_t *data, bool readData, uint8_t len
 	csnHi();
 }
 
-inline void Nrf24l::ceHi(){    //PB1
+void Nrf24l::ceHi(){    //PB1
 	//digitalWrite(cePin,HIGH);
   PORTB |= (1<<1);
 }
 
-inline void Nrf24l::ceLow(){
+void Nrf24l::ceLow(){
 	//digitalWrite(cePin,LOW);
   PORTB &= (~(1<<1));
 }
 
-inline void Nrf24l::csnHi(){  //PB2
+void Nrf24l::csnHi(){  //PB2
 	//digitalWrite(csnPin,HIGH);
   PORTB |= (1<<2);
 }
 
-inline void Nrf24l::csnLow(){
+void Nrf24l::csnLow(){
 	//digitalWrite(csnPin,LOW);
   PORTB &= (~(1<<2));
 }

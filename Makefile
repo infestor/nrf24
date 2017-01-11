@@ -36,7 +36,7 @@ DEPFLAGS = -MMD -MP -MT $@ -MF $(DEPDIR)/$*.Td
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
-LDFLAGS = $(COMMON) -dead_strip
+LDFLAGS = $(COMMON)
 LDFLAGS += -Wl,--gc-sections 
 LDFLAGS_MASTER = -Wl,-u,vfprintf
 #LDFLAGS += -Wl,-Map=nrf_comm.map
