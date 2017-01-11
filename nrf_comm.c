@@ -68,6 +68,8 @@ typedef union {
 uint8_t volatile adcVal;
 volatile IntUnion ds1820Temp;
 
+void main() __attribute__ ((noreturn));
+
 //======================================================
 void USART_Transmit( char *data, uint8_t len )
 {
@@ -181,7 +183,7 @@ void setup()
 }
 
 //======================================================
-void main(void) __attribute__ ((noreturn));
+void main(void)
 {
  wdt_disable();   
 

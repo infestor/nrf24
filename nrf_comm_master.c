@@ -29,6 +29,8 @@ typedef union {
   };
 } IntUnion;
 
+void main() __attribute__ ((noreturn));
+
 //IntUnion volatile adcVal;
 
 //======================================================
@@ -149,7 +151,7 @@ void setup()
   sei();
 }
 
-void main(void) __attribute__ ((noreturn));
+void main(void)
 {
  wdt_disable();
  setup();
