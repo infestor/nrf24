@@ -13,7 +13,6 @@
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
-uint8_t sendResult;
 uint8_t volatile citac;
 uint8_t volatile uartPos = 0;
 //uint8_t volatile uartBufEmpty = 1;
@@ -29,6 +28,8 @@ typedef union {
     uint8_t msb;
   };
 } IntUnion;
+
+void main() __attribute__ ((noreturn));
 
 //IntUnion volatile adcVal;
 
@@ -150,7 +151,7 @@ void setup()
   sei();
 }
 
-int main(void)
+void main(void)
 {
  wdt_disable();
  setup();
@@ -223,5 +224,4 @@ int main(void)
 
  }
 
- return 0;
 }

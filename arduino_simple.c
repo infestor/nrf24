@@ -1,4 +1,3 @@
-//#define __AVR_ATmega328__ 1
 #include <stdio.h>
 #include <avr/io.h>
 #include <string.h>

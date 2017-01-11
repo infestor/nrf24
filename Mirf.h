@@ -21,7 +21,7 @@ const char mirf_ADDR[] = "honza";
 #define MAX_RX_PACKET_QUEUE 6
 #define MAX_TX_PACKET_QUEUE 1
 #define MAX_ACK_PACKET_QUEUE 8
-#define MAX_TX_ATTEMPTS 3
+#define MAX_TX_ATTEMPTS 4
 #define MAX_ACK_WAIT_TIME 3 //25
 #define NOP_ASM __asm__("nop\n\t");
 

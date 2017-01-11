@@ -68,6 +68,8 @@ typedef union {
 uint8_t volatile adcVal;
 volatile IntUnion ds1820Temp;
 
+void main() __attribute__ ((noreturn));
+
 //======================================================
 void USART_Transmit( char *data, uint8_t len )
 {
@@ -181,7 +183,7 @@ void setup()
 }
 
 //======================================================
-int main(void)
+void main(void)
 {
  wdt_disable();   
 
@@ -206,9 +208,10 @@ int main(void)
             WDTCSR = 0; //wdt = off
             wdt_timer = 0;
             low_power_mode = 0;
-            //enable Mirf receiver - run before reading DS1820 enables to catch incoming packet(s) during temp read
-            Mirf.powerUpRx();
             ReadDS1820(); //refresh temperature measurement
+            //enable Mirf receiver - run after DS1820 reading, because there is short timeout for sending ack and data packets back
+	    //so it wouldt make sense to catch packets during reading of sensor because those packets would be useless after getting to them
+            Mirf.powerUpRx();
             TIFR0 = 2; //delete possible interrupt flag of timer0      
             TIMSK0 = 2; //activate interrupts for timer0
         }
@@ -354,5 +357,4 @@ int main(void)
    }
  }
 
- return 0;
 }
