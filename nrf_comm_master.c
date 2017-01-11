@@ -13,7 +13,6 @@
 
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
-uint8_t sendResult;
 uint8_t volatile citac;
 uint8_t volatile uartPos = 0;
 //uint8_t volatile uartBufEmpty = 1;
