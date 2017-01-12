@@ -48,6 +48,7 @@ uint8_t volatile pinState;
 uint8_t internalTempCalib;
 volatile uint8_t sendResult;
 uint16_t volatile longTimer;
+uint8_t volatile timerInterruptTriggered;
 
 #ifdef LOW_POWER_ENABLE
  #define LOW_POWER_CYCLES 8 //interval = this_number * 8sec
@@ -84,9 +85,7 @@ void USART_Transmit( char *data, uint8_t len )
 
 //======================================================
 ISR(TIMER0_COMPA_vect) {
-  	Mirf.handleRxLoop();
-  	Mirf.handleTxLoop();
-  	
+  	timerInterruptTriggered++;
   	longTimer++;
 }
 
@@ -212,8 +211,9 @@ void main(void)
             //enable Mirf receiver - run after DS1820 reading, because there is short timeout for sending ack and data packets back
 	    //so it wouldt make sense to catch packets during reading of sensor because those packets would be useless after getting to them
             Mirf.powerUpRx();
-            TIFR0 = 2; //delete possible interrupt flag of timer0      
+            //TIFR0 = 2; //delete possible interrupt flag of timer0
             TIMSK0 = 2; //activate interrupts for timer0
+            timerInterruptTriggered++; //artificially trigger check of rx/tx queues on chip
         }
         else {  //continue with sleep mode
             WDTCSR |= (1<<WDIE); //interrupt enable flag is atomatically cleared by interrupt for watchdog, must be refreshed
@@ -225,7 +225,19 @@ void main(void)
         continue;
     }
     #endif
-    
+
+	 // handle periodic checking of MIRF
+	 // originally it was located right in the ISR handling function
+	 // but maybe it will be easier when it will be here
+	 // and this also is possible even when processor is sleeping after each cycle of this WHILE loop
+	 // because the timer ISR wakes it so it comes here right after that
+	 if (timerInterruptTriggered > 0)
+	 {
+		 timerInterruptTriggered = 0;
+		 Mirf.handleRxLoop();
+		 Mirf.handleTxLoop();
+	 }
+
    //zpracovat prichozi packet
    if (Mirf.inPacketReady)
    {
@@ -297,8 +309,9 @@ void main(void)
                 //even if whole interval (3sec) didnt elapse yet
                 //this should save some power
                 //but limit this feature only on SUCCESSFUL sending of packet 
-                while (Mirf.sendResult == 1) NOP_ASM
-                if (Mirf.sendResult == 0) { //was it succesfull send?
+  				Mirf.handleTxLoop();
+                while (Mirf.sendResult == IN_FIFO) NOP_ASM
+                if (Mirf.sendResult == SUCCESS) { //was it succesfull send?
                     longTimer += TIMER_3_SEC_PERIOD;
                 }
             #endif
@@ -322,6 +335,12 @@ void main(void)
    		Mirf.sendPacket((mirfPacket*)&outPacket);
      }
    }
+
+   if (Mirf.sendingStatus == IN_FIFO)
+   {
+	   Mirf.handleTxLoop();
+   }
+
 #ifdef LOW_POWER_ENABLE 
    else if (longTimer > TIMER_3_SEC_PERIOD) //3sec period awake (only)
    {

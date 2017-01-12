@@ -18,6 +18,7 @@ uint8_t volatile uartPos = 0;
 //uint8_t volatile uartBufEmpty = 1;
 uint8_t volatile uartIncoming = 0;
 uint8_t volatile awaitingResult;
+uint8_t volatile timerInterruptTriggered = 0;
 
 char buff[35];
 
@@ -35,8 +36,7 @@ void main() __attribute__ ((noreturn));
 
 //======================================================
 ISR(TIMER0_COMPA_vect) {
-  	Mirf.handleRxLoop();
-  	Mirf.handleTxLoop();
+	timerInterruptTriggered++;
     citac++;
 }
 
@@ -158,11 +158,24 @@ void main(void)
 
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
 
- sprintf(buff, "COMM MASTER\n");
- USART_Transmit(buff, strlen(buff) );
+ USART_Transmit("COMM MASTER\n", 12 );
 
  //------------------------------------
- while(1) {
+ while(1)
+ {
+
+	 // handle periodic checking of MIRF
+	 // originally it was located right in the ISR handling function
+	 // but maybe it will be easier when it will be here
+	 // and this also is possible even when processor is sleeping after each cycle of this WHILE loop
+	 // because the timer ISR wakes it so it comes here right after that
+	 if (timerInterruptTriggered > 0)
+	 {
+		 timerInterruptTriggered = 0;
+		 Mirf.handleRxLoop();
+		 Mirf.handleTxLoop();
+	 }
+
 	 //zpracovat prichozi packet
 	 if (Mirf.inPacketReady)
 	 {
@@ -190,12 +203,16 @@ void main(void)
 		 else //packet was sent, we will wait for sendResult and send it to usart
 		 {
 			 awaitingResult = 1;
+			 //run tx loop earlier than in timer ISR to speed up sending,
+			 //and since handling of rx/tx functions was moved away from ISR function
+			 //we dont have to care about disabling the interrupt during invocation of this here
+			 Mirf.handleTxLoop();
 		 }
 	 }
 
-	 if (awaitingResult && (Mirf.sendResult != 1) ) //we are waiting for send result and it changed from in queue to some other value
+	 if (awaitingResult && (Mirf.sendResult != IN_FIFO) ) //we are waiting for send result and it changed from in queue to some other value
 	 {
-		 if (Mirf.sendResult == 0) {
+		 if (Mirf.sendResult == SUCCESS) {
 			 USART_Transmit("OK", 2);
 		 }
 		 else if (Mirf.sendResult == TIMEOUT) {
@@ -212,9 +229,6 @@ void main(void)
 	 {
 		 uartIncoming = 0; //reset receiving
 	 }
-
-
-
 
  }
 

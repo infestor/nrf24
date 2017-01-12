@@ -23,40 +23,37 @@ void Nrf24l::handleRxLoop(void)
       
 	  if ( (pendingPacket.rxAddr == devAddr) || (pendingPacket.rxAddr == MULTICAST_ADDR) )
 	  { //is the packet for this device? or multicast
-		  if ( ((PACKET_TYPE)pendingPacket.type == ACK) || ((PACKET_TYPE)pendingPacket.type == ACK_RESP) )
-		  {
-			  //TODO: handle ACK_RESP packet payload.. propably just give it to app as it is
-			  #ifdef _DEBUG_
-			  UDR0 = 60; //DEBUG <
-			  #endif
-			  if ( ((SENDING_STATUS)sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) ) //ack for sent packet received
-			  {
-				  sendingStatus = 0;
-				  sendResult = 0;
-				  removePacketfromTxQueue();
-				  //remove sent packet from queue
-				  //and add confirmation to confirmed queue
-				  //addConfirmedPacket(pendingPacket.counter);
-			  }
-		  }
-		  else if (pendingPacket.type == PING)
-		  {
-			  createAck((mirfPacket*)&pendingPacket);
-		  }
-		  else
-		  { //other packets are saved to queue and app has to hadle them
-            if (inPacketReady != MAX_RX_PACKET_QUEUE) //if queue is not full
-            {
-              //last_addr_in = pendingPacket.txAddr;
-              //last_packetCounter_in = pendingPacket.counter;
-                            
+		if ( (sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) )
+		{ //ack(some response) for sent packet received
+		sendingStatus = READY;
+		sendResult = SUCCESS;
+		removePacketfromTxQueue();
+		//remove sent packet from queue
+		//and add confirmation to confirmed queue
+		//addConfirmedPacket(pendingPacket.counter);
+
+		//store received response if queue is not full (and the packet is not just ACK)
+		}
+		else if (pendingPacket.type == PING)
+		{
+		  createAck((mirfPacket*)&pendingPacket);
+		  continue;
+		}
+
+		if (pendingPacket.type != ACK)
+		{
+			if (inPacketReady != MAX_RX_PACKET_QUEUE)
+			{
+			  //last_addr_in = pendingPacket.txAddr;
+			  //last_packetCounter_in = pendingPacket.counter;
+
 			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
 			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-			  createAck((mirfPacket*)&pendingPacket);
-            }
-		  }
+			  //createAck((mirfPacket*)&pendingPacket);
+			}
+		}
 	  }
       
       //we have to have some theoretical limit staying in this function
@@ -85,7 +82,7 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 		}
 		else
 		{
-		   if ( (sendingStatus == IN_FIFO) || (sendingStatus == WAIT_FREE_AIR) ) //new packet in fifo waiting to be sent
+		   if ( ((SENDING_STATUS)sendingStatus == IN_FIFO) || (sendingStatus == WAIT_FREE_AIR) ) //new packet in fifo waiting to be sent
 		   {
 			   pPaket = (uint8_t *)&txQueue[txPosBeg];
 			   whatToSend = 2;
@@ -119,11 +116,24 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
         else  //if it was not ack packet, then it was for sure user packet
       	 //if ( (whatToSend >> 1) == 1) //if there was also user packet
         {
-      		sendingStatus = WAIT_ACK;
-      		ackTimeoutTimer = Timer + MAX_ACK_WAIT_TIME;
+        	//when sending some REQUEST we will wait for answer packet
+        	//else if this packet itself is response, we will not wait for anything and set
+        	//seccesfull sending right away now
+        	if ( (((mirfPacket*)pPaket)->type == REQUEST) || \
+        		 (((mirfPacket*)pPaket)->type == PRESENTATION_REQUEST) )
+        	{
+        		sendingStatus = WAIT_ACK;
+        		ackTimeoutTimer = Timer + MAX_ACK_WAIT_TIME;
+        	}
+        	else
+        	{
+        		sendingStatus = READY;
+        		sendResult = SUCCESS;
+        		//remove packet from queue - we can because it was already sent to NRF FIFO
+        		removePacketfromTxQueue();
+        	}
       	}
 
-        while ( isSending() ) NOP_ASM //wait for end of transfer and immediately start RX mode
       	//powerUpRx(); //when 2 or more packets, we have to wait until fifo is empty (while isSending() )       
       }
       /*
@@ -161,14 +171,16 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
     {
        if (Timer == ackTimeoutTimer)
        {
-         sendingStatus = 0; //must be set to 0 to be able to send another packets
-         sendResult = TIMEOUT;
+    	 (SENDING_STATUS)sendingStatus = READY; //must be set to 0 to be able to send another packets
+         (SEND_RESULT)sendResult = TIMEOUT;
          removePacketfromTxQueue();
 		 #ifdef _DEBUG_
          UDR0 = 94; //DEBUG sipka nahoru
 		 #endif
        }
     }
+
+    while ( isSending() ) NOP_ASM //wait for end of transfer and immediately start RX mode
 }
 
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -191,7 +203,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 uint8_t Nrf24l::sendPacket(mirfPacket* paket)
 {
   //another sending in progress, busy -> fail
-  if ( (sendingStatus > 0) )
+  if ( (sendingStatus != READY) )
   {
      return 0;
   }
@@ -210,8 +222,8 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   txQueueSize++;
   txPosEnd++;
   if (txPosEnd == MAX_TX_PACKET_QUEUE) txPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
-  sendingStatus = 1; //set sign that there is sending packet pending
-  sendResult = 1;
+  sendingStatus = IN_FIFO; //set sign that there is sending packet pending
+  sendResult = IN_FIFO;
   txAttempt = 1;
   sei();
   
@@ -259,6 +271,9 @@ Nrf24l::Nrf24l() {
 	//csnPin = D10;
 	spi = &SPI;
 	baseConfig = _BV(EN_CRC) & ~_BV(CRCO);
+	packetCounter = 0;
+	devAddr = 0;
+	channel = DEFAULT_RF_CHANNEL;
 }
 
 void Nrf24l::init()
