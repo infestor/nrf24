@@ -1,8 +1,0 @@
-*.o
-*.elf
-*.lss
-*.hex
-*.obj
-*.map
-*.eep
-dep
