@@ -171,8 +171,8 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
     {
        if (Timer == ackTimeoutTimer)
        {
-    	 (SENDING_STATUS)sendingStatus = READY; //must be set to 0 to be able to send another packets
-         (SEND_RESULT)sendResult = TIMEOUT;
+    	 sendingStatus = READY; //must be set to 0 to be able to send another packets
+         sendResult = TIMEOUT;
          removePacketfromTxQueue();
 		 #ifdef _DEBUG_
          UDR0 = 94; //DEBUG sipka nahoru
@@ -223,7 +223,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   txPosEnd++;
   if (txPosEnd == MAX_TX_PACKET_QUEUE) txPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
   sendingStatus = IN_FIFO; //set sign that there is sending packet pending
-  sendResult = IN_FIFO;
+  sendResult = PROCESSING;
   txAttempt = 1;
   sei();
   

@@ -310,7 +310,7 @@ void main(void)
                 //this should save some power
                 //but limit this feature only on SUCCESSFUL sending of packet 
   				Mirf.handleTxLoop();
-                while (Mirf.sendResult == IN_FIFO) NOP_ASM
+                while (Mirf.sendResult == PROCESSING) NOP_ASM
                 if (Mirf.sendResult == SUCCESS) { //was it succesfull send?
                     longTimer += TIMER_3_SEC_PERIOD;
                 }

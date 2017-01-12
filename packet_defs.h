@@ -12,7 +12,7 @@ typedef enum {
 
 typedef enum {
   SUCCESS = 0,
-  IN_FIFO = 1,
+  PROCESSING = 1,
   TIMEOUT = 4,
   MAX_ATTEMPTS = 5
 } SEND_RESULT;

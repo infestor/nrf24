@@ -210,7 +210,7 @@ void main(void)
 		 }
 	 }
 
-	 if (awaitingResult && (Mirf.sendResult != IN_FIFO) ) //we are waiting for send result and it changed from in queue to some other value
+	 if (awaitingResult && (Mirf.sendResult != PROCESSING) ) //we are waiting for send result and it changed from in queue to some other value
 	 {
 		 if (Mirf.sendResult == SUCCESS) {
 			 USART_Transmit("OK", 2);
