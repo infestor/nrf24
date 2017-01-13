@@ -46,7 +46,6 @@ mirfPacket volatile outPacket;
 uint8_t volatile pinState;
 //char buff[30];
 uint8_t internalTempCalib;
-volatile uint8_t sendResult;
 uint16_t volatile longTimer;
 uint8_t volatile timerInterruptTriggered;
 
@@ -263,7 +262,6 @@ void main(void)
   	    		getAdcVal();
   	    		adcVal = ADCW - 19 - internalTempCalib;
   	    		res->payload[0] = adcVal;
-  	    		sendResult = Mirf.sendResult;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
   	    	}
   	    	else if (req->cmd == CALIBRATION_WRITE)
@@ -291,7 +289,7 @@ void main(void)
   		  else if (req->cmd == READ)
   		  {
   			 res->payload[0] = pinState;
-  			 sendResult = Mirf.sendPacket((mirfPacket*)&outPacket);
+  			 Mirf.sendPacket((mirfPacket*)&outPacket);
   		  }
         }
   		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
@@ -325,7 +323,6 @@ void main(void)
      else if ( (PACKET_TYPE)inPacket.type == PRESENTATION_REQUEST )
      {
  		outPacket.type = PRESENTATION_RESPONSE;
- 		outPacket.rxAddr = inPacket.txAddr;
  		payloadPresentationStruct *res = (payloadPresentationStruct*)&outPacket.payload;
  		res->num_sensors = NUM_SENSORS;
    		res->sensor_type[0] = SENSOR_0_TYPE;
