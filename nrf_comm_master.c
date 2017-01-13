@@ -179,7 +179,7 @@ void main(void)
 	 //zpracovat prichozi packet
 	 if (Mirf.inPacketReady)
 	 {
-		 if (!uartIncoming)
+		 if ( (!uartIncoming) && (!awaitingResult) )
 		 {
 			 Mirf.readPacket((mirfPacket*)&inPacket);
 			 //send whole packet through usart

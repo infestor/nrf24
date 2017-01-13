@@ -23,7 +23,12 @@ void Nrf24l::handleRxLoop(void)
       
 	  if ( (pendingPacket.rxAddr == devAddr) || (pendingPacket.rxAddr == MULTICAST_ADDR) )
 	  { //is the packet for this device? or multicast
-		if ( (sendingStatus == WAIT_ACK) && (txQueue[txPosBeg].counter == pendingPacket.counter) )
+		if ( (sendingStatus == WAIT_ACK) )
+		//ERROR: normal response packet does not copy COUNTER value from its request packet
+		//so here counters cannot be compared
+		//this is just workaround for a while. I will figure it out
+		//but it will probably need adding some ,,needAck" flag in packets
+		//&& (txQueue[txPosBeg].counter == pendingPacket.counter) )
 		{ //ack(some response) for sent packet received
 		sendingStatus = READY;
 		sendResult = SUCCESS;
