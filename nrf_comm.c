@@ -54,7 +54,7 @@ uint8_t volatile timerInterruptTriggered;
  uint8_t volatile wdt_timer;
  uint8_t volatile low_power_mode = 0;
  #undef SENSOR_2_TYPE
- #define SENSOR_2_TYPE 4 + LOW_POWER_SENSOR_TYPE_FLAG //dallas 18b20 temp sensor + low power sign 
+ #define SENSOR_2_TYPE 4 + LOW_POWER_SENSOR_TYPE_FLAG //dallas 18b20 temp sensor + low power sign
 #endif
 
 typedef union {
@@ -113,16 +113,13 @@ void ReadDS1820(void)
 	DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
 	while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
 	ow_command( DS18X20_READ, NULL );
-	
+
     //read 16bit value into uint16
     ds1820Temp.lsb = ow_byte_rd();
     ds1820Temp.msb = ow_byte_rd();
-    
-    //read rest of bytes from sensor, but we do not use the data
-    for ( uint8_t i = 2; i < DS18X20_SP_SIZE; i++ )
-    {
-		ow_byte_rd();
-	}
+
+    //do not read rest of bytes from sensor, just reset the line
+	ow_reset();
 }
 
 //======================================================
@@ -148,16 +145,24 @@ void setup()
   UBRR0L = 16;
   UCSR0C = _BV(UCSZ01) | _BV(UCSZ00);
   UCSR0B = _BV(RXEN0) | _BV(TXEN0);
-  
+
   //read internal temp sensor calibration byte from eeprom
   internalTempCalib = eeprom_read_byte(SENSOR_0_CALIB_ADDR);
   if (internalTempCalib == 0xFF) internalTempCalib = 128;
+
+  //set resolution 0.25C for DS18B20 (write just to scratchpad, not to eeprom)
+  ow_reset();
+  ow_command(DS18X20_WRITE, NULL);
+  ow_byte_wr(0xFF); //1st byte - unused (register Tl)
+  ow_byte_wr(0xFF); //2nd byte - unused (register Th)
+  ow_byte_wr(0x3F); //3rd byte - resolution 10bits
+  ow_reset();
 
   //start Radio
   Mirf.init();
   Mirf.config();
   Mirf.setDevAddr(DEV_ADDR);
-  
+
   //timer0 10ms period, interrupt enable
   //prescaler 1024, count to 156
   OCR0A = 156;
@@ -177,32 +182,32 @@ void setup()
 
   //disable unused peripherials
   PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) ) ;
-  
+
 }
 
 //======================================================
 void main(void)
 {
- wdt_disable();   
+ wdt_disable();
 
  setup();
  ReadDS1820();  //for the first time
 
  sei();
- 
+
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
  //memset(buff, 0, sizeof(buff));
- 
+
  //debug();
  while(1) {
 
-    #ifdef LOW_POWER_ENABLE 
+    #ifdef LOW_POWER_ENABLE
     //low power mode driven by watchdog resets - loop trap
     if (low_power_mode == 1)
     {
         if (wdt_timer == LOW_POWER_CYCLES) { //sleep mode elapsed, turn off and go to normal mode
             SMCR = 0; //power down mode = off
-            WDTCSR = (1<<WDCE) | (1<<WDE);    
+            WDTCSR = (1<<WDCE) | (1<<WDE);
             WDTCSR = 0; //wdt = off
             wdt_timer = 0;
             low_power_mode = 0;
@@ -216,9 +221,9 @@ void main(void)
         }
         else {  //continue with sleep mode
             WDTCSR |= (1<<WDIE); //interrupt enable flag is atomatically cleared by interrupt for watchdog, must be refreshed
-            SMCR = 0b00000100; //power down sleep mode                       		
+            SMCR = 0b00000100; //power down sleep mode
             sleep_enable();
-            sleep_cpu();      
+            sleep_cpu();
         }
 
         continue;
@@ -241,10 +246,10 @@ void main(void)
    if (Mirf.inPacketReady)
    {
      Mirf.readPacket((mirfPacket*)&inPacket);
-     
+
      //sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
      //USART_Transmit((char*)buff, strlen((char*)buff) );
-          
+
      if ( (PACKET_TYPE)inPacket.type == REQUEST )
 	 {
 	    payloadRequestStruct *req = (payloadRequestStruct*)&inPacket.payload;
@@ -277,10 +282,10 @@ void main(void)
   	    		res->payload[0] = internalTempCalib;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
   	    	}
-         
+
   		}
   		else if (req->for_sensor == 1) //==== door switch =====
-  		{  
+  		{
   		  if (req->cmd == WRITE)
   		  {
   		     if (req->payload[0] > 0) pinState = HIGH; else pinState = LOW;
@@ -299,15 +304,15 @@ void main(void)
 			res->payload[0] = ds1820Temp.lsb;
 			res->payload[1] = ds1820Temp.msb;
   			Mirf.sendPacket((mirfPacket*)&outPacket);
-            
+
             #ifdef LOW_POWER_ENABLE
                 //if we are in low power mode, after first response to request for this sensor
                 //wait until the packet is really sent and then
                 //increase long timer, so in next while loop it will jump right into power down mode,
                 //even if whole interval (3sec) didnt elapse yet
                 //this should save some power
-                //but limit this feature only on SUCCESSFUL sending of packet 
-  				Mirf.handleTxLoop();
+                //but limit this feature only on SUCCESSFUL sending of packet
+                Mirf.handleTxLoop();
                 while (Mirf.sendResult == PROCESSING) NOP_ASM
                 if (Mirf.sendResult == SUCCESS) { //was it succesfull send?
                     longTimer += TIMER_3_SEC_PERIOD;
@@ -343,16 +348,16 @@ void main(void)
    {
    		longTimer = 0;
         //temperature measurement is refreshed during end of low power mode
-         
+
         // ENTER POWER DOWN MODE - watchdog timed refresh
         TIMSK0 = 0; // turn off 10ms timer (by disabling its interrupt)
         SMCR = 0b00000100; //power down sleep mode
-        WDTCSR = (1<<WDCE) | (1<<WDE) | (1<<WDP3) | (1<<WDP0);    
+        WDTCSR = (1<<WDCE) | (1<<WDE) | (1<<WDP3) | (1<<WDP0);
         WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0); //8sec timeout of watchdog
         wdt_timer = 0;
         low_power_mode = 1;
         Mirf.powerDown();
-                     		
+
         sleep_enable();
         sleep_cpu();
     }
@@ -360,9 +365,9 @@ void main(void)
    else if (longTimer > TIMER_60_SEC_PERIOD) //60sec period
    {
    		longTimer = 0;
-        
+
         //refresh temperature measurement
-        ReadDS1820();  	
+        ReadDS1820();
    }
 #endif   
    else //if there is no packet to be processed, we can enter idle mode to save some power
