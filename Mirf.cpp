@@ -10,10 +10,6 @@ void Nrf24l::handleRxLoop(void)
 {   
   Timer++; //every time we must increment timer
   uint8_t innerCounter = 0;
-
-  #ifdef _DEBUG_
-  //UDR0 = 46; //DEBUG
-  #endif
   
   //if (inPacketReady == MAX_RX_PACKET_QUEUE) return;
   //if there is full queue, return a wait for next turn
@@ -81,9 +77,6 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 		{
 			pPaket = (uint8_t *)&ackQueue[ackPosBeg];
 			whatToSend = 1;
-			#ifdef _DEBUG_
-			//UDR0 = 61; //DEBUG =
-			#endif
 		}
 		else
 		{
@@ -91,9 +84,6 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 		   {
 			   pPaket = (uint8_t *)&txQueue[txPosBeg];
 			   whatToSend = 2;
-			   #ifdef _DEBUG_
-			   //UDR0 = 62; //DEBUG >
-			   #endif
 		   }
 		}
 	  }
@@ -114,9 +104,6 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
       	if ( whatToSend == 1) //remove packet if it was ack
       	{
       		removePacketfromAckQueue();
-			#ifdef _DEBUG_
-      		UDR0 = 61; //DEBUG =
-			#endif
       	}
         else  //if it was not ack packet, then it was for sure user packet
       	 //if ( (whatToSend >> 1) == 1) //if there was also user packet
@@ -253,7 +240,7 @@ void Nrf24l::createAck(mirfPacket* paket)
   if (ackPosEnd == MAX_ACK_PACKET_QUEUE) ackPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
 }
 
-inline void Nrf24l::removePacketfromTxQueue(void)
+void Nrf24l::removePacketfromTxQueue(void)
 {
     txQueueSize--;
     txPosBeg++;
@@ -479,7 +466,8 @@ void Nrf24l::powerUpRx() {
 	configRegister(CONFIG, baseConfig | _BV(PWR_UP) | _BV(PRIM_RX));
 	configRegister(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT)); 
 	#ifdef _DEBUG_
-	UDR0 = 95; //DEBUG _
+	while ( !( UCSR0A & (1<<UDRE0)) );
+	UDR0 = 'R'; //DEBUG _
 	#endif
 	ceHi();
 }
@@ -492,7 +480,8 @@ void Nrf24l::powerUpTx() {
 	PTX = 1;
 	ceLow();
 	#ifdef _DEBUG_
-	UDR0 = 33; //DEBUG !
+	while ( !( UCSR0A & (1<<UDRE0)) );
+	UDR0 = 'T'; //DEBUG !
 	#endif
 	configRegister(CONFIG, baseConfig | (_BV(PWR_UP) & ~_BV(PRIM_RX)) );
 }
