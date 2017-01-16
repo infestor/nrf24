@@ -245,8 +245,8 @@ void main(void)
      //sprintf((char*)buff, "in: TX:%d,T:%d,C:%d\n", inPacket.txAddr, inPacket.type, inPacket.counter);
      //USART_Transmit((char*)buff, strlen((char*)buff) );
           
-     if ( (PACKET_TYPE)inPacket.type == REQUEST )
-	 {
+     if ( inPacket.type == REQUEST )
+	 { 
 	    payloadRequestStruct *req = (payloadRequestStruct*)&inPacket.payload;
 		outPacket.type = RESPONSE;
 		outPacket.rxAddr = inPacket.txAddr;
@@ -293,7 +293,7 @@ void main(void)
   		  }
         }
   		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
-  		{
+  		{  		
             //use value stored in memory
 	  		res->len = 2;
 			res->payload[0] = ds1820Temp.lsb;
@@ -306,11 +306,11 @@ void main(void)
                 //increase long timer, so in next while loop it will jump right into power down mode,
                 //even if whole interval (3sec) didnt elapse yet
                 //this should save some power
-                //but limit this feature only on SUCCESSFUL sending of packet 
+                //but limit this feature only on SUCCESSFUL sending of packet                
   				Mirf.handleTxLoop();
                 while (Mirf.sendResult == PROCESSING) NOP_ASM
                 if (Mirf.sendResult == SUCCESS) { //was it succesfull send?
-                    longTimer += TIMER_3_SEC_PERIOD;
+                    //longTimer += TIMER_3_SEC_PERIOD;
                 }
             #endif
   		}
@@ -331,16 +331,17 @@ void main(void)
    		res->sensor_type[3] = SENSOR_3_TYPE;
    		Mirf.sendPacket((mirfPacket*)&outPacket);
      }
-   }
 
-   if (Mirf.sendingStatus == IN_FIFO)
-   {
-	   Mirf.handleTxLoop();
+	 if (Mirf.sendingStatus == IN_FIFO)
+	 {
+		Mirf.handleTxLoop();
+	 }
+     
    }
 
 #ifdef LOW_POWER_ENABLE 
    else if (longTimer > TIMER_3_SEC_PERIOD) //3sec period awake (only)
-   {
+   {   
    		longTimer = 0;
         //temperature measurement is refreshed during end of low power mode
          
