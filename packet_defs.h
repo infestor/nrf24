@@ -7,10 +7,15 @@ typedef enum {
   READY = 0,
   IN_FIFO = 1,
   WAIT_FREE_AIR = 2,
-  WAIT_ACK = 3,
+  WAIT_ACK = 3
+} SENDING_STATUS;
+
+typedef enum {
+  SUCCESS = 0,
+  PROCESSING = 1,
   TIMEOUT = 4,
   MAX_ATTEMPTS = 5
-} SENDING_STATUS;
+} SEND_RESULT;
 
 typedef enum {
   RESERVED = 0,
