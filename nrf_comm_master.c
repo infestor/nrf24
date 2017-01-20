@@ -126,6 +126,7 @@ void setup()
   Mirf.init();
   Mirf.setDevAddr(DEV_ADDR);
   Mirf.config(); 
+  Mirf.powerUpRx();
 
 #ifdef _DEBUG_
   Mirf.csnLow();
