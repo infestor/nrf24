@@ -41,6 +41,12 @@
 #define SENSOR_2_TYPE 4 //dallas 18b20 temp sensor
 #define SENSOR_3_TYPE 6 //2 lion in series supply
 
+//adc settings: AREF in + mux on GND
+#define REF_VCC_INPUT_INTERNAL _BV(REFS0)  | (_BV(MUX3) | _BV(MUX2) | _BV(MUX1))
+//_BV(MUX3) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0)
+#define ADC_ON PRR &= ~_BV(PRADC)
+#define ADC_OFF PRR |= _BV(PRADC)
+
 mirfPacket volatile inPacket;
 mirfPacket volatile outPacket;
 uint8_t volatile pinState;
@@ -50,6 +56,7 @@ uint16_t volatile longTimer;
 uint8_t volatile timerInterruptTriggered;
 
 #ifdef LOW_POWER_ENABLE
+ #define LOW_POWER_USE_DEEP_SLEEP_RX_LOOP 0
  #define LOW_POWER_CYCLES 8 //interval = this_number * 8sec
  uint8_t volatile wdt_timer;
  uint8_t volatile low_power_mode = 0;
@@ -67,6 +74,7 @@ typedef union {
 
 uint8_t volatile adcVal;
 volatile IntUnion ds1820Temp;
+volatile uint8_t actual_Vcc;
 
 void main() __attribute__ ((noreturn));
 
@@ -104,14 +112,33 @@ ISR(WDT_vect)
 }
 #endif
 
-void ReadDS1820(void)
+void DS1820StartConversion(void)
 {
-//read temperature from DS1820 and store it to memory
-
-	//DS18X20_read_maxres_single( gDallasID[0], &temp_eminus4 );
-
 	DS18X20_start_meas( DS18X20_POWER_EXTERN, NULL );
+}
+
+void DS1820WaitForEndConversion_loop(void)
+{
 	while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING) __asm__("nop\n\t");
+}
+
+//uses IDLE sleep mode during waiting for the result
+//but can be used ONLY WHEN PERIODIC INTERRUPTS ENABLED
+//because there needs to be something that will wake processor up from time to time
+void DS1820WaitForEndConversion_sleep(void)
+{
+	while (DS18X20_conversion_in_progress() == DS18X20_CONVERTING)
+	{
+		SMCR = 0; //idle sleep mode
+		sleep_enable();
+		sleep_cpu();
+	}
+
+	sleep_disable();
+}
+
+void DS1820ReadConversionResult(void)
+{
 	ow_command( DS18X20_READ, NULL );
 
     //read 16bit value into uint16
@@ -122,9 +149,17 @@ void ReadDS1820(void)
 	ow_reset();
 }
 
+void ReadDS1820(void)
+{
+//read temperature from DS1820 and store it to memory
+	DS1820StartConversion();
+	DS1820WaitForEndConversion_loop();
+	DS1820ReadConversionResult();
+}
+
 //======================================================
 //WARNING: adc MUX and reference must be set before calling this
-void getAdcVal(void)
+void startAdcConversion(void)
 {
 	  SMCR = 2; //enable ADC noise reduct sleep mode
 
@@ -162,6 +197,7 @@ void setup()
   Mirf.init();
   Mirf.config();
   Mirf.setDevAddr(DEV_ADDR);
+  Mirf.powerUpRx();
 
   //timer0 10ms period, interrupt enable
   //prescaler 1024, count to 156
@@ -172,8 +208,8 @@ void setup()
   TIMSK0 = 2;
 
   //set ADC to read temp from internal sensor, 1.1V reference, prescaler 128
-  ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3));
-  ADCSRA |= (_BV(ADEN) | _BV(ADIE) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0) );  // enable the ADC
+  ADMUX = REF_VCC_INPUT_INTERNAL;
+  ADCSRA = (_BV(ADEN) | _BV(ADIE) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0) );  // enable the ADC
 
   //led13 as output
   //pinMode(SWITCHED_PIN, OUTPUT);
@@ -181,7 +217,8 @@ void setup()
   //digitalWrite(SWITCHED_PIN, pinState);
 
   //disable unused peripherials
-  PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) ) ;
+  ACSR |= _BV(ACD); //disable comparator
+  PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRUSART0) ) ;
 
 }
 
@@ -191,9 +228,18 @@ void main(void)
  wdt_disable();
 
  setup();
- ReadDS1820();  //for the first time
+ //Read DS1820 for the first time
+ //but use the LOOP WAIT function because interrupts are not enabled so the sleep mode would never end
+ DS1820StartConversion();
+ DS1820WaitForEndConversion_loop();
+ DS1820ReadConversionResult();
 
  sei();
+
+ ADMUX = REF_VCC_INPUT_INTERNAL; //Vcc reference + mux on internal 1.1V
+ startAdcConversion();
+ actual_Vcc = 56265 / ADCW; // Calculate
+ ADC_OFF; //disable ADC again
 
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
  //memset(buff, 0, sizeof(buff));
@@ -206,17 +252,44 @@ void main(void)
     if (low_power_mode == 1)
     {
         if (wdt_timer == LOW_POWER_CYCLES) { //sleep mode elapsed, turn off and go to normal mode
+            ADC_ON; //turn on ADC
             SMCR = 0; //power down mode = off
             WDTCSR = (1<<WDCE) | (1<<WDE);
             WDTCSR = 0; //wdt = off
             wdt_timer = 0;
             low_power_mode = 0;
-            ReadDS1820(); //refresh temperature measurement
-            //enable Mirf receiver - run after DS1820 reading, because there is short timeout for sending ack and data packets back
-	    //so it wouldt make sense to catch packets during reading of sensor because those packets would be useless after getting to them
-            Mirf.powerUpRx();
-            //TIFR0 = 2; //delete possible interrupt flag of timer0
+
+            //refresh temperature measurement
+            //but to not just waste time in wait loop, we will use the 185ms conversion time
+            // to do some other useful stuff in the meantime
+            DS1820StartConversion();
+
+            // we can read battery voltage during conversion time
+            // will use special recipe when measure internal 1.1 with Vcc reference which will
+            //allow to count the Vcc from that
+            ADMUX = REF_VCC_INPUT_INTERNAL;; //Vcc reference + mux on internal 1.1V
+            startAdcConversion();
+            // orgiginal formula was 1125300L / ADCW; -> Vcc (in mV); 1125300 = 1.1*1023*1000
+            // which is not the best because of using 32bit constant
+            // and it will be better to get result which will fit into 1B instead of having it in mV
+            // when I dig deeper into the formula I discovered that
+            // best is to use 20x smaller constant (fit into 16bit) which will produce values:
+            // 255 for 5092mv; or 90 for 1800mV which are our max values. Super!
+            // calculation will be done on the server side - just divide by 50 and get value in Volts!
+            actual_Vcc = 56265 / ADCW; // Calculate
+            ADC_OFF; //disable ADC again
+
+            // enable interrupt from timer again for periodic wake/read/DS1820_sleep func
+            TIFR0 = 2; //delete possible interrupt flag of timer0
             TIMSK0 = 2; //activate interrupts for timer0
+
+            //wait the rest of time until conversion finish
+            DS1820WaitForEndConversion_sleep();
+            DS1820ReadConversionResult();
+
+            //enable Mirf receiver - run after DS1820 reading, because there is short timeout for sending ack and data packets back
+            //so it wouldt make sense to catch packets during reading of sensor because those packets would be useless after getting to them
+            Mirf.powerUpRx();
             timerInterruptTriggered++; //artificially trigger check of rx/tx queues on chip
         }
         else {  //continue with sleep mode
@@ -264,8 +337,12 @@ void main(void)
   	    {
   	    	if (req->cmd == READ)
   	    	{
-  	    		getAdcVal();
+  	    		ADC_ON;
+  	    		ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3)); // ref = internal 1.1V + mux on temp sensor
+  	    		startAdcConversion();
+  	    		ADMUX = REF_VCC_INPUT_INTERNAL; //return back settings which draws less power
   	    		adcVal = ADCW - 19 - internalTempCalib;
+  	    		ADC_OFF;
   	    		res->payload[0] = adcVal;
   	    		Mirf.sendPacket((mirfPacket*)&outPacket);
   	    	}
@@ -298,12 +375,17 @@ void main(void)
   		  }
         }
   		else if (req->for_sensor == 2) //==== dallas 1820 temperature ====
-  		{  		
+  		{
             //use value stored in memory
-	  		res->len = 2;
+			#ifdef LOW_POWER_ENABLE
+			 res->len = 3;
+			 res->payload[2] = actual_Vcc; //send also Vcc measure
+			#else
+			 res->len = 2;
+			#endif
 			res->payload[0] = ds1820Temp.lsb;
 			res->payload[1] = ds1820Temp.msb;
-  			Mirf.sendPacket((mirfPacket*)&outPacket);
+			Mirf.sendPacket((mirfPacket*)&outPacket);
 
             #ifdef LOW_POWER_ENABLE
                 //if we are in low power mode, after first response to request for this sensor
@@ -341,12 +423,12 @@ void main(void)
 	 {
 		Mirf.handleTxLoop();
 	 }
-     
+
    }
 
 #ifdef LOW_POWER_ENABLE 
    else if (longTimer > TIMER_3_SEC_PERIOD) //3sec period awake (only)
-   {   
+   {
    		longTimer = 0;
         //temperature measurement is refreshed during end of low power mode
 
@@ -362,7 +444,7 @@ void main(void)
         sleep_enable();
         sleep_cpu();
     }
-#else    
+#else
    else if (longTimer > TIMER_60_SEC_PERIOD) //60sec period
    {
    		longTimer = 0;
@@ -370,9 +452,20 @@ void main(void)
         //refresh temperature measurement
         ReadDS1820();
    }
-#endif   
+#endif
    else //if there is no packet to be processed, we can enter idle mode to save some power
    {
+	  #ifdef LOW_POWER_ENABLE
+	    #ifdef LOW_POWER_USE_DEEP_SLEEP_RX_LOOP
+	      #if LOW_POWER_USE_DEEP_SLEEP_RX_LOOP == 1
+			// if we are low power device, we are usig the RX_DR interrupt from NRF
+			// so we wil go into POWER DOWN sleep mode instead of IDLE
+			// and wait for the interrupt (pin change interrupt) from this source to wake us
+			// BUT! there is problem - in power down Timer0 is not running
+			// so we need to set and use WDT to emergency wake if there is no Rx at all
+	      #endif
+	    #endif
+	   #endif
 	  sleep_enable();
 	  sleep_cpu();
 	  sleep_disable();

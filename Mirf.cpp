@@ -262,7 +262,7 @@ Nrf24l::Nrf24l() {
 	//cePin = D9;
 	//csnPin = D10;
 	spi = &SPI;
-	baseConfig = _BV(EN_CRC) & ~_BV(CRCO);
+	baseConfig = ( _BV(EN_CRC) | _BV(MASK_TX_DS) | _BV(MASK_MAX_RT) ) & ~_BV(CRCO);
 	packetCounter = 0;
 	devAddr = 0;
 	channel = DEFAULT_RF_CHANNEL;
@@ -301,9 +301,7 @@ void Nrf24l::config()
 	configRegister(RX_PW_P1, NRF_PAYLOAD_SIZE);
   setADDR();
   
-	// Start receiver 
 	flushRx();
-	powerUpRx();
 }
 
 inline void Nrf24l::setRfChannel(uint8_t new_channel)
@@ -343,6 +341,7 @@ bool Nrf24l::dataReady()
 	// We can short circuit on RX_DR, but if it's not set, we still need
 	// to check the FIFO for any pending packets
 	if (status & _BV(RX_DR))
+		configRegister(STATUS, _BV(RX_DR)); //clear RX interrupt flag
 		return 1;
 
 	return !rxFifoEmpty();
