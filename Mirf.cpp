@@ -262,7 +262,7 @@ Nrf24l::Nrf24l() {
 	//cePin = D9;
 	//csnPin = D10;
 	spi = &SPI;
-	baseConfig = _BV(EN_CRC) & ~_BV(CRCO) & _BV(MASK_TX_DS) & _BV(MASK_MAX_RT);
+	baseConfig = ( _BV(EN_CRC) | _BV(MASK_TX_DS) | _BV(MASK_MAX_RT) ) & ~_BV(CRCO);
 	packetCounter = 0;
 	devAddr = 0;
 	channel = DEFAULT_RF_CHANNEL;

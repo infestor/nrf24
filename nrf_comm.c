@@ -42,7 +42,8 @@
 #define SENSOR_3_TYPE 6 //2 lion in series supply
 
 //adc settings: AREF in + mux on GND
-#define AREF_GND _BV(MUX3) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0)
+#define REF_VCC_INPUT_INTERNAL _BV(REFS0)  | (_BV(MUX3) | _BV(MUX2) | _BV(MUX1))
+//_BV(MUX3) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0)
 #define ADC_ON PRR &= ~_BV(PRADC)
 #define ADC_OFF PRR |= _BV(PRADC)
 
@@ -207,7 +208,7 @@ void setup()
   TIMSK0 = 2;
 
   //set ADC to read temp from internal sensor, 1.1V reference, prescaler 128
-  ADMUX = AREF_GND;
+  ADMUX = REF_VCC_INPUT_INTERNAL;
   ADCSRA = (_BV(ADEN) | _BV(ADIE) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0) );  // enable the ADC
 
   //led13 as output
@@ -217,7 +218,7 @@ void setup()
 
   //disable unused peripherials
   ACSR |= _BV(ACD); //disable comparator
-  PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRADC) | _BV(PRUSART0) ) ;
+  PRR = ( _BV(PRTWI) | _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRUSART0) ) ;
 
 }
 
@@ -235,6 +236,11 @@ void main(void)
 
  sei();
 
+ ADMUX = REF_VCC_INPUT_INTERNAL; //Vcc reference + mux on internal 1.1V
+ startAdcConversion();
+ actual_Vcc = 56265 / ADCW; // Calculate
+ ADC_OFF; //disable ADC again
+
  memset((void*)&outPacket, 0, sizeof(mirfPacket) );
  //memset(buff, 0, sizeof(buff));
 
@@ -246,6 +252,7 @@ void main(void)
     if (low_power_mode == 1)
     {
         if (wdt_timer == LOW_POWER_CYCLES) { //sleep mode elapsed, turn off and go to normal mode
+            ADC_ON; //turn on ADC
             SMCR = 0; //power down mode = off
             WDTCSR = (1<<WDCE) | (1<<WDE);
             WDTCSR = 0; //wdt = off
@@ -260,8 +267,7 @@ void main(void)
             // we can read battery voltage during conversion time
             // will use special recipe when measure internal 1.1 with Vcc reference which will
             //allow to count the Vcc from that
-            ADC_ON; //turn on ADC
-            ADMUX = _BV(REFS0)  | (_BV(MUX3) | _BV(MUX2) | _BV(MUX1)); //Vcc reference + mux on internal 1.1V
+            ADMUX = REF_VCC_INPUT_INTERNAL;; //Vcc reference + mux on internal 1.1V
             startAdcConversion();
             // orgiginal formula was 1125300L / ADCW; -> Vcc (in mV); 1125300 = 1.1*1023*1000
             // which is not the best because of using 32bit constant
@@ -271,7 +277,6 @@ void main(void)
             // 255 for 5092mv; or 90 for 1800mV which are our max values. Super!
             // calculation will be done on the server side - just divide by 50 and get value in Volts!
             actual_Vcc = 56265 / ADCW; // Calculate
-            ADMUX = AREF_GND; //ref to Aref, mux to GND
             ADC_OFF; //disable ADC again
 
             // enable interrupt from timer again for periodic wake/read/DS1820_sleep func
@@ -335,7 +340,7 @@ void main(void)
   	    		ADC_ON;
   	    		ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3)); // ref = internal 1.1V + mux on temp sensor
   	    		startAdcConversion();
-  	    		ADMUX = AREF_GND; //return back settings which draws less power
+  	    		ADMUX = REF_VCC_INPUT_INTERNAL; //return back settings which draws less power
   	    		adcVal = ADCW - 19 - internalTempCalib;
   	    		ADC_OFF;
   	    		res->payload[0] = adcVal;
