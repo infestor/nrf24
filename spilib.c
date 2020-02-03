@@ -1,12 +1,11 @@
 
-#include "avr/io.h"
+#include <avr/io.h>
 #include "spilib.h"
-#include "arduino_simple.h"
 
-SPIlib SPI = SPIlib();
+__attribute__((used)) SPIlib SPI = SPIlib();
 
 // Initialize SPI Master Device (without interrupt)
-SPIlib::SPIlib()
+SPIlib::SPIlib(void)
 {
   //nothing to do so far
 }
@@ -33,7 +32,7 @@ uint8_t SPIlib::transfer (uint8_t data)
     SPDR = data;
  
     //Wait until transmission complete
-    while(!(SPSR)&(1<<SPIF));
+    while((!SPSR) & (1<<SPIF));
  
     // Return received data
     return(SPDR);

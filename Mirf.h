@@ -6,7 +6,6 @@
 #include <avr/io.h>
 #include <stdlib.h>
 #include <avr/interrupt.h>
-#include "arduino_simple.h"
 #include "spilib.h"
 #include "packet_defs.h"
 
@@ -25,16 +24,23 @@ const char mirf_ADDR[] = "honza";
 #define MAX_ACK_WAIT_TIME 2 //25
 #define NOP_ASM __asm__("nop\n\t");
 
-typedef struct {
-  ADDR_TYPE txAddr;
-  ADDR_TYPE rxAddr;
+typedef struct mirfPacket{
+  ADDR_TYPE volatile txAddr;
+  ADDR_TYPE volatile rxAddr;
   //ADDR_TYPE origAddr;
-  uint8_t  type;
-  uint8_t  counter;
-  uint8_t  payload[7];
+  uint8_t  volatile type;
+  uint8_t  volatile counter;
+  uint8_t  volatile payload[7];
+
+  //mirfPacket& operator = (volatile mirfPacket& a) { return *this; }
 } mirfPacket;
 
 #define NRF_PAYLOAD_SIZE sizeof(mirfPacket)
+
+#define CE_PIN PB1
+#define CSN_PIN PB2
+#define CE_CSN_PORT PORTB
+#define CE_CSN_DDR DDRB
 
 /*
 #define ceHi() PORTB |= (1<<1)
@@ -56,9 +62,9 @@ class Nrf24l {
 
 	void setADDR(void);
     void setDevAddr(ADDR_TYPE);
-    
+
 	bool dataReady();
-	volatile bool isSending();
+	bool isSending();
 	bool rxFifoEmpty();
 	bool txFifoEmpty();
 	void getData(uint8_t * data);
@@ -87,10 +93,10 @@ class Nrf24l {
 	void nrfSpiWrite(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
 	void nrfSpiWrite2(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
 
-	__attribute__((noinline)) void csnHi();
-	__attribute__((noinline)) void csnLow();
-	__attribute__((noinline)) void ceHi();
-	__attribute__((noinline)) void ceLow();
+	void csnHi(); //__attribute__((noinline))
+	void csnLow();
+	void ceHi();
+	void ceLow();
 
     //-----------------------------------------------------------------------
     //------------------ Variables ------------------------------------------
@@ -137,19 +143,19 @@ class Nrf24l {
 		//MirfSpiDriver *spi; //MirfSpiDriver
 
     //-------------------------------------------------------------------------
-    mirfPacket volatile pendingPacket;
+	mirfPacket pendingPacket;
 
-    mirfPacket volatile rxQueue[MAX_RX_PACKET_QUEUE];
+    mirfPacket rxQueue[MAX_RX_PACKET_QUEUE];
     uint8_t volatile rxPosBeg;
     uint8_t volatile rxPosEnd;
 
-    mirfPacket volatile txQueue[MAX_TX_PACKET_QUEUE];
+    mirfPacket txQueue[MAX_TX_PACKET_QUEUE];
     uint8_t volatile txPosBeg;
     uint8_t volatile txPosEnd;
     uint8_t volatile txQueueSize;
     uint8_t volatile txAttempt;
 
-    mirfPacket volatile ackQueue[MAX_ACK_PACKET_QUEUE];
+    mirfPacket ackQueue[MAX_ACK_PACKET_QUEUE];
     uint8_t volatile ackPosBeg;
     uint8_t volatile ackPosEnd;
     uint8_t volatile ackQueueSize;

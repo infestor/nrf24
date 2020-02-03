@@ -38,7 +38,9 @@ typedef enum {
   INTERNAL_TEMP = 3,
   DS1820_TEMP = 4,
   BATTERY_1_LION = 5,
-  BATTERY_2_LION = 6
+  BATTERY_2_LION = 6,
+  PWM = 7,
+  PWM_3_CHANNEL = 8
 } SENSOR_TYPE;
 
 //payload related structures

@@ -3,20 +3,20 @@
 #include "Mirf_nRF24L01.h"
 #include "Mirf.h"
 
-Nrf24l Mirf = Nrf24l();
+__attribute__((used)) Nrf24l Mirf = Nrf24l();
 
 //should be run within some timered loop (really often - 10ms)
 void Nrf24l::handleRxLoop(void)
-{   
+{
   Timer++; //every time we must increment timer
   uint8_t innerCounter = 0;
-  
+
   //if (inPacketReady == MAX_RX_PACKET_QUEUE) return;
   //if there is full queue, return a wait for next turn
    while ( dataReady() ) //while something in rx buffer
    {
 	  getData( (uint8_t*) &pendingPacket);
-      
+
 	  if ( (pendingPacket.rxAddr == devAddr) || (pendingPacket.rxAddr == MULTICAST_ADDR) )
 	  { //is the packet for this device? or multicast
 		if ( (sendingStatus == WAIT_ACK) )
@@ -48,7 +48,7 @@ void Nrf24l::handleRxLoop(void)
 			  //last_addr_in = pendingPacket.txAddr;
 			  //last_packetCounter_in = pendingPacket.counter;
 
-			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
+			  memcpy((void*)(&(rxQueue[rxPosEnd])), (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
 			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
@@ -56,7 +56,7 @@ void Nrf24l::handleRxLoop(void)
 			}
 		}
 	  }
-      
+
       //we have to have some theoretical limit staying in this function
       //because if there were too much incoming packets all the time,
       //then this function would never end
@@ -75,14 +75,14 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 	  {
 		if ( (ackQueueSize > 0) )
 		{
-			pPaket = (uint8_t *)&ackQueue[ackPosBeg];
+			pPaket = (uint8_t *)(&(ackQueue[ackPosBeg]));
 			whatToSend = 1;
 		}
 		else
 		{
 		   if ( ((SENDING_STATUS)sendingStatus == IN_FIFO) || (sendingStatus == WAIT_FREE_AIR) ) //new packet in fifo waiting to be sent
 		   {
-			   pPaket = (uint8_t *)&txQueue[txPosBeg];
+			   pPaket = (uint8_t *)(&(txQueue[txPosBeg]));
 			   whatToSend = 2;
 		   }
 		}
@@ -90,17 +90,17 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 
 	//this is for sending user packet
 	if ( whatToSend > 0 ) //new packet in fifo waiting to be sent
-    {      
+    {
 
       flushTx();
       //write user packet to fifo       
       nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, NRF_PAYLOAD_SIZE);  
-      
+
       if ( 1 ) //getCarrier()==0 ) //no carrier detected (free air/free to send)
       {
         powerUpTx();       // Set to transmitter mode , Power up
       	ceHi();                     // Start transmission
-                
+
       	if ( whatToSend == 1) //remove packet if it was ack
       	{
       		removePacketfromAckQueue();
@@ -157,7 +157,7 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 		#endif
     }
     */
-    
+
     //check if there was TIMEOUT in waiting for ACK
     if ( (SENDING_STATUS)sendingStatus == WAIT_ACK) //check whether timeout waiting for ack occured
     {
@@ -184,7 +184,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 	//we have to temporarily disable timer0 interrupt because no one else could be able to touch
 	//the packet queue until we are finished
   	cli();
-    memcpy(paket, (const void*)&rxQueue[rxPosBeg], NRF_PAYLOAD_SIZE);
+    memcpy(paket, (void*)(&(rxQueue[rxPosBeg])), NRF_PAYLOAD_SIZE);
     inPacketReady--;
     rxPosBeg++;
     if (rxPosBeg == MAX_RX_PACKET_QUEUE) rxPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -209,7 +209,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  memcpy((void*)&txQueue[txPosEnd], paket, NRF_PAYLOAD_SIZE);
+  memcpy((void *)&(txQueue[txPosEnd]), (const void *)paket, NRF_PAYLOAD_SIZE);
 
   txQueueSize++;
   txPosEnd++;
@@ -218,7 +218,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   sendResult = PROCESSING;
   txAttempt = 1;
   sei();
-  
+
   return packetCounter;
 }
 
@@ -274,7 +274,7 @@ void Nrf24l::init()
 {
 	//pinMode(cePin, OUTPUT);
 	//pinMode(csnPin, OUTPUT);
-	DDRB |= 0b00000110;
+	CE_CSN_DDR |= (1 << CE_PIN) | (1 << CSN_PIN);
 	ceLow();
 	csnHi();
 
@@ -300,7 +300,7 @@ void Nrf24l::config()
 	configRegister(RX_PW_P0, NRF_PAYLOAD_SIZE);
 	configRegister(RX_PW_P1, NRF_PAYLOAD_SIZE);
   setADDR();
-  
+
 	flushRx();
 }
 
@@ -341,8 +341,10 @@ bool Nrf24l::dataReady()
 	// We can short circuit on RX_DR, but if it's not set, we still need
 	// to check the FIFO for any pending packets
 	if (status & _BV(RX_DR))
+	{
 		configRegister(STATUS, _BV(RX_DR)); //clear RX interrupt flag
 		return 1;
+	}
 
 	return !rxFifoEmpty();
 }
@@ -398,11 +400,11 @@ void Nrf24l::writeRegister(uint8_t reg, uint8_t * value, uint8_t len)
  * When sending has finished return chip to listening.
  *
  */
-volatile bool Nrf24l::isSending() {
+bool Nrf24l::isSending() {
 	uint8_t status;
 	if(PTX){
 		nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &status, true, 1);
-	    	
+
 		/*
 		 *  if sending successful (TX_DS) or max retries exceded (MAX_RT).
 		 */
@@ -427,7 +429,7 @@ volatile bool Nrf24l::isSending() {
 // 
 // 		if((status & ((1 << TX_DS)  | (1 << MAX_RT)))){
 // 			powerUpRx();
-// 			return false;                                                                                                    
+// 			return false;
 // 		}
 // 
 // 		return true;
@@ -485,7 +487,7 @@ void Nrf24l::powerUpTx() {
 	configRegister(CONFIG, baseConfig | (_BV(PWR_UP) & ~_BV(PRIM_RX)) );
 }
 
-void Nrf24l::nrfSpiWrite(uint8_t reg, uint8_t *data, bool readData, uint8_t len) {  
+void Nrf24l::nrfSpiWrite(uint8_t reg, uint8_t *data, bool readData, uint8_t len) {
   csnLow();
 
 	spi->transfer(reg);
@@ -504,11 +506,11 @@ void Nrf24l::nrfSpiWrite(uint8_t reg, uint8_t *data, bool readData, uint8_t len)
 	csnHi();
 }
 
-void Nrf24l::nrfSpiWrite2(uint8_t reg, uint8_t *data, bool readData, uint8_t len) {  
+void Nrf24l::nrfSpiWrite2(uint8_t reg, uint8_t *data, bool readData, uint8_t len) {
   csnLow();
 
 	spi->transfer(reg);
-  spi->transfer(255);
+	spi->transfer(255);
 
 	if (data) {
 		uint8_t i;
@@ -526,22 +528,26 @@ void Nrf24l::nrfSpiWrite2(uint8_t reg, uint8_t *data, bool readData, uint8_t len
 
 void Nrf24l::ceHi(){    //PB1
 	//digitalWrite(cePin,HIGH);
-  PORTB |= (1<<1);
+	//PORTB |= (1<<1);
+	CE_CSN_PORT |= (1 << CE_PIN);
 }
 
 void Nrf24l::ceLow(){
 	//digitalWrite(cePin,LOW);
-  PORTB &= (~(1<<1));
+	//PORTB &= (~(1<<1));
+	CE_CSN_PORT &= (~(1 << CE_PIN));
 }
 
 void Nrf24l::csnHi(){  //PB2
 	//digitalWrite(csnPin,HIGH);
-  PORTB |= (1<<2);
+	//PORTB |= (1<<2);
+	CE_CSN_PORT |= (1 << CSN_PIN);
 }
 
 void Nrf24l::csnLow(){
 	//digitalWrite(csnPin,LOW);
-  PORTB &= (~(1<<2));
+	//PORTB &= (~(1<<2));
+	CE_CSN_PORT &= (~(1 << CSN_PIN));
 }
 
 
