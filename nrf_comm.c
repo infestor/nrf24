@@ -213,7 +213,7 @@ void setup()
 
   //led13 as output
   //pinMode(SWITCHED_PIN, OUTPUT);
-  pinState = HIGH;
+  pinState = 1;
   //digitalWrite(SWITCHED_PIN, pinState);
 
   //disable unused peripherials
@@ -365,7 +365,7 @@ void main(void)
   		{
   		  if (req->cmd == WRITE)
   		  {
-  		     if (req->payload[0] > 0) pinState = HIGH; else pinState = LOW;
+  		     if (req->payload[0] > 0) pinState = 1; else pinState = 0;
   			 //digitalWrite(SWITCHED_PIN, pinState);
   		  }
   		  else if (req->cmd == READ)

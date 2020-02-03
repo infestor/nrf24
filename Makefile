@@ -14,7 +14,8 @@ $(shell mkdir -p $(OUTDIR) >/dev/null)
 
 #CESTA=/usr/local/CrossPack-AVR/bin/
 #CESTA="C:/WinAVR-20100110\\bin\\"
-CESTA =
+#CESTA =/local/benejan/tmp/avr/bin/
+CESTA=
 
 CC = $(CESTA)avr-c++
 CPP = $(CESTA)avr-c++
@@ -25,12 +26,13 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -g -gdwarf-2 -DF_CPU=16000000UL -O1
+CFLAGS += -Wall -g0 -gdwarf-2 -DF_CPU=16000000UL -Os
 CFLAGS += -ffreestanding
 CFLAGS += -fno-tree-scev-cprop
 CFLAGS += -mcall-prologues 
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
-CFLAGS += -fdata-sections -ffunction-sections
+CFLAGS += -fdata-sections -ffunction-sections 
+CFLAGS += -fno-split-wide-types
 
 # handling header file dependency
 DEPDIR := $(OUTDIR)/dep
@@ -40,7 +42,7 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
 LDFLAGS = $(COMMON)
-LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,--gc-sections -Wl,--relax
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
 #when the RELAX is activated, it will stop working
@@ -59,7 +61,7 @@ INCLUDES =
 LIBDIRS =
 
 ## Objects that must be built in order to link
-COMMON_OBJECTS = arduino_simple.o Mirf.o spilib.o
+COMMON_OBJECTS = Mirf.o spilib.o
 OBJECTS = nrf_comm.o $(COMMON_OBJECTS) onewire.o ds18x20.o
 OBJECTS_MASTER = nrf_comm_master.o $(COMMON_OBJECTS)
 
@@ -95,14 +97,14 @@ $(OUTDIR)/%.o: %.cpp $(DEPDIR)/%.d
 	$(POSTCOMPILE)
 
 ## special experiment to build whole program
-NODE_SOURCES = arduino_simple.c spilib.c nrf_comm.c onewire.c ds18x20.c Mirf.cpp
+NODE_SOURCES = spilib.c nrf_comm.c onewire.c ds18x20.c Mirf.cpp
  
 mazec:
-	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program $(LDFLAGS) $(LIBDIRS) $(NODE_SOURCES) -o $(OUTDIR)/$(TARGET)
+	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program -flto $(LDFLAGS) $(LIBDIRS) $(NODE_SOURCES) -o $(OUTDIR)/$(TARGET)
 	$(MAKE) nrf_comm.hex
 
 mazec2:
-	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program $(LDFLAGS) $(LDFLAGS_MASTER) $(LIBDIRS) $(filter-out nrf_comm.c,$(SRCS)) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
+	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program -flto $(LDFLAGS) $(LDFLAGS_MASTER) $(LIBDIRS) $(filter-out nrf_comm.c,$(SRCS)) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
 	$(MAKE) nrf_comm_master.hex
 
 ##Link
