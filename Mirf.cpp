@@ -48,7 +48,7 @@ void Nrf24l::handleRxLoop(void)
 			  //last_addr_in = pendingPacket.txAddr;
 			  //last_packetCounter_in = pendingPacket.counter;
 
-			  memcpy((void*)(&(rxQueue[rxPosEnd])), (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
+			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
 			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
@@ -75,14 +75,14 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 	  {
 		if ( (ackQueueSize > 0) )
 		{
-			pPaket = (uint8_t *)(&(ackQueue[ackPosBeg]));
+			pPaket = (uint8_t *)&ackQueue[ackPosBeg];
 			whatToSend = 1;
 		}
 		else
 		{
 		   if ( ((SENDING_STATUS)sendingStatus == IN_FIFO) || (sendingStatus == WAIT_FREE_AIR) ) //new packet in fifo waiting to be sent
 		   {
-			   pPaket = (uint8_t *)(&(txQueue[txPosBeg]));
+			   pPaket = (uint8_t *)&txQueue[txPosBeg];
 			   whatToSend = 2;
 		   }
 		}
@@ -184,7 +184,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 	//we have to temporarily disable timer0 interrupt because no one else could be able to touch
 	//the packet queue until we are finished
   	cli();
-    memcpy(paket, (void*)(&(rxQueue[rxPosBeg])), NRF_PAYLOAD_SIZE);
+    memcpy(paket, (const void*)&rxQueue[rxPosBeg], NRF_PAYLOAD_SIZE);
     inPacketReady--;
     rxPosBeg++;
     if (rxPosBeg == MAX_RX_PACKET_QUEUE) rxPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -209,7 +209,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  memcpy((void *)&(txQueue[txPosEnd]), (const void *)paket, NRF_PAYLOAD_SIZE);
+  memcpy((void*)&txQueue[txPosEnd], paket, NRF_PAYLOAD_SIZE);
 
   txQueueSize++;
   txPosEnd++;
