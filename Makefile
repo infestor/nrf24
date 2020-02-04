@@ -42,7 +42,7 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
 LDFLAGS = $(COMMON)
-LDFLAGS += -Wl,--gc-sections -Wl,--relax
+LDFLAGS += -Wl,--gc-sections
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
 #when the RELAX is activated, it will stop working

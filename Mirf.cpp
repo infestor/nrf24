@@ -326,10 +326,10 @@ void Nrf24l::setDevAddr(ADDR_TYPE addr)
 void Nrf24l::setADDR(void)
 //sets address for RX and TX in NRF module (both the same)
 {
-	ceLow();
+	//ceLow();
 	writeRegister(RX_ADDR_P0, (uint8_t*)mirf_ADDR, mirf_ADDR_LEN);
 	writeRegister(TX_ADDR, (uint8_t*)mirf_ADDR, mirf_ADDR_LEN);  
-	ceHi();
+	//ceHi();
 } 
 
 bool Nrf24l::dataReady() 
@@ -371,7 +371,9 @@ void Nrf24l::getData(uint8_t * data)
 	//  repeat from step 1)."
 	// So if we're going to clear RX_DR here, we need to check the RX FIFO
 	// in the dataReady() function
-	configRegister(STATUS, _BV(RX_DR));   // Reset status register
+
+	//maybe this is not necessary here
+	//configRegister(STATUS, _BV(RX_DR));   // Reset status register
 }
 
 void Nrf24l::configRegister(uint8_t reg, uint8_t value)
