@@ -8,6 +8,7 @@
 #include <avr/interrupt.h>
 #include "spilib.h"
 #include "packet_defs.h"
+#include "Mirf_nRF24L01.h"
 
 // Nrf24l settings
 
@@ -90,8 +91,8 @@ class Nrf24l {
 	void powerUpTx();
 	void powerDown();
 
-	void nrfSpiWrite(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
-	void nrfSpiWrite2(uint8_t reg, uint8_t *data = 0, bool readData = false, uint8_t len = 0);
+	void nrfSpiWrite(uint8_t reg, uint8_t *data = NULL, bool readData = false, uint8_t len = 0);
+	void nrfSpiWrite2(uint8_t reg, uint8_t *data = NULL, bool readData = false, uint8_t len = 0);
 
 	void csnHi(); //__attribute__((noinline))
 	void csnLow();

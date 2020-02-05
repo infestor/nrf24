@@ -93,13 +93,16 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
     {
 
       flushTx();
+      powerUpTx();       // Set to transmitter mode , Power up
+      ceHi();                     // Start 10us pulse to trigger transmission
+
       //write user packet to fifo       
       nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, NRF_PAYLOAD_SIZE);  
 
       if ( 1 ) //getCarrier()==0 ) //no carrier detected (free air/free to send)
       {
-        powerUpTx();       // Set to transmitter mode , Power up
-      	ceHi();                     // Start transmission
+        //powerUpTx();       // Set to transmitter mode , Power up
+      	//ceHi();                     // Start transmission
 
       	if ( whatToSend == 1) //remove packet if it was ack
       	{
@@ -326,10 +329,10 @@ void Nrf24l::setDevAddr(ADDR_TYPE addr)
 void Nrf24l::setADDR(void)
 //sets address for RX and TX in NRF module (both the same)
 {
-	//ceLow();
+	ceLow();
 	writeRegister(RX_ADDR_P0, (uint8_t*)mirf_ADDR, mirf_ADDR_LEN);
 	writeRegister(TX_ADDR, (uint8_t*)mirf_ADDR, mirf_ADDR_LEN);  
-	//ceHi();
+	ceHi();
 } 
 
 bool Nrf24l::dataReady() 
@@ -352,7 +355,7 @@ bool Nrf24l::dataReady()
 bool Nrf24l::rxFifoEmpty(){
 	uint8_t fifoStatus;
 
-	nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &fifoStatus, true, 1);
+	nrfSpiWrite((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &fifoStatus, true, 1);
 	//readRegister(FIFO_STATUS, &fifoStatus, sizeof(fifoStatus));
 
 	return (fifoStatus & _BV(RX_EMPTY));
@@ -361,7 +364,7 @@ bool Nrf24l::rxFifoEmpty(){
 void Nrf24l::getData(uint8_t * data) 
 // Reads payload bytes into data array
 {
-	nrfSpiWrite2(R_RX_PAYLOAD, data, true, NRF_PAYLOAD_SIZE); // Read payload
+	nrfSpiWrite(R_RX_PAYLOAD, data, true, NRF_PAYLOAD_SIZE); // Read payload
 
 	// NVI: per product spec, p 67, note c:
 	//  "The RX_DR IRQ is asserted by a new packet arrival event. The procedure
@@ -405,7 +408,7 @@ void Nrf24l::writeRegister(uint8_t reg, uint8_t * value, uint8_t len)
 bool Nrf24l::isSending() {
 	uint8_t status;
 	if(PTX){
-		nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &status, true, 1);
+		nrfSpiWrite((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &status, true, 1);
 
 		/*
 		 *  if sending successful (TX_DS) or max retries exceded (MAX_RT).
@@ -445,15 +448,18 @@ uint8_t Nrf24l::getCarrier(){
 	/* Initialize with NOP so we get the first byte read back. */
 	uint8_t rv = NOP_CMD;
 	nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & CD)), &rv, true, 1);
-  //readRegister(CD, &rv, 1);
+	//readRegister(CD, &rv, 1);
 	return (rv & 1);
 }
 
 uint8_t Nrf24l::getStatus(){
 	/* Initialize with NOP so we get the first byte read back. */
 	uint8_t rv = NOP_CMD;
-	nrfSpiWrite((R_REGISTER | (REGISTER_MASK & STATUS)), &rv, true, 1);
-  //readRegister(STATUS, &rv, 1);
+	//nrfSpiWrite((R_REGISTER | (REGISTER_MASK & STATUS)), &rv, true, 1);
+	//readRegister(STATUS, &rv, 1);
+	csnLow();
+	rv = spi->transfer(rv);
+	csnHi();
 	return rv;
 }
 

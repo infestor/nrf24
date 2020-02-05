@@ -32,7 +32,8 @@ uint8_t SPIlib::transfer (uint8_t data)
     SPDR = data;
  
     //Wait until transmission complete
-    while((!SPSR) & (1<<SPIF));
+    while(!(SPSR & (1 << SPIF)))
+	;
  
     // Return received data
     return(SPDR);
