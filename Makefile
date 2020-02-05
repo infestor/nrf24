@@ -29,7 +29,7 @@ CFLAGS = $(COMMON)
 CFLAGS += -Wall -g0 -gdwarf-2 -DF_CPU=16000000UL -Os
 CFLAGS += -ffreestanding
 CFLAGS += -fno-tree-scev-cprop
-CFLAGS += -mcall-prologues 
+CFLAGS += -mcall-prologues
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -fno-jump-tables
 CFLAGS += -fdata-sections -ffunction-sections 
 CFLAGS += -fno-split-wide-types
@@ -42,11 +42,11 @@ POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 ## Linker flags
 LDFLAGS = $(COMMON)
-LDFLAGS += -Wl,--gc-sections -Wl,--relax
+LDFLAGS += -Wl,--gc-sections
 #LDFLAGS += -Wl,-Map=nrf_comm.map
 
 #when the RELAX is activated, it will stop working
-#LDFLAGS_NODE += -Wl,--relax
+LDFLAGS += -Wl,--relax
 LDFLAGS_MASTER = -Wl,-u,vfprintf
 
 ## Objects explicitly added by the user
@@ -105,7 +105,8 @@ mazec:
 
 mazec2:
 	$(CC) $(INCLUDES) $(CFLAGS) -fwhole-program -flto $(LDFLAGS) $(LDFLAGS_MASTER) $(LIBDIRS) $(filter-out nrf_comm.c,$(SRCS)) $(LIBS) -o $(OUTDIR)/$(TARGET_MASTER)
-	$(MAKE) nrf_comm_master.hex
+	$(CESTA)avr-objcopy -O ihex $(HEX_FLASH_FLAGS)  $(OUTDIR)/$(TARGET_MASTER) $(OUTDIR)/nrf_comm_master.hex
+	$(CESTA)avr-size --mcu=$(MCU) --format=avr $(OUTDIR)/$(TARGET_MASTER)
 
 ##Link
 $(TARGET): $(OBJ_PATH)

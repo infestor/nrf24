@@ -24,6 +24,9 @@
     $Id$
 */
 
+#ifndef _MIRF_COMMANDS_H_
+#define _MIRF_COMMANDS_H_
+
 /* Memory Map */
 #define CONFIG      0x00
 #define EN_AA       0x01
@@ -114,3 +117,5 @@
 #define FLUSH_RX      0xE2
 #define REUSE_TX_PL   0xE3
 #define NOP_CMD       0xFF
+
+#endif //_MIRF_COMMANDS_H_

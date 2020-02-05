@@ -48,7 +48,7 @@ void Nrf24l::handleRxLoop(void)
 			  //last_addr_in = pendingPacket.txAddr;
 			  //last_packetCounter_in = pendingPacket.counter;
 
-			  memcpy((void*)(&(rxQueue[rxPosEnd])), (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
+			  memcpy((void*)&rxQueue[rxPosEnd], (mirfPacket*)&pendingPacket, NRF_PAYLOAD_SIZE);
 			  inPacketReady++;
 			  rxPosEnd++;
 			  if (rxPosEnd == MAX_RX_PACKET_QUEUE) rxPosEnd = 0; //queue counted from 0, so on the max  number we are already out of array bounds
@@ -75,14 +75,14 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
 	  {
 		if ( (ackQueueSize > 0) )
 		{
-			pPaket = (uint8_t *)(&(ackQueue[ackPosBeg]));
+			pPaket = (uint8_t *)&ackQueue[ackPosBeg];
 			whatToSend = 1;
 		}
 		else
 		{
 		   if ( ((SENDING_STATUS)sendingStatus == IN_FIFO) || (sendingStatus == WAIT_FREE_AIR) ) //new packet in fifo waiting to be sent
 		   {
-			   pPaket = (uint8_t *)(&(txQueue[txPosBeg]));
+			   pPaket = (uint8_t *)&txQueue[txPosBeg];
 			   whatToSend = 2;
 		   }
 		}
@@ -93,13 +93,16 @@ void Nrf24l::handleTxLoop(void) //probably should be run from main program loop,
     {
 
       flushTx();
+      powerUpTx();       // Set to transmitter mode , Power up
+      ceHi();                     // Start 10us pulse to trigger transmission
+
       //write user packet to fifo       
       nrfSpiWrite(W_TX_PAYLOAD, pPaket, false, NRF_PAYLOAD_SIZE);  
 
       if ( 1 ) //getCarrier()==0 ) //no carrier detected (free air/free to send)
       {
-        powerUpTx();       // Set to transmitter mode , Power up
-      	ceHi();                     // Start transmission
+        //powerUpTx();       // Set to transmitter mode , Power up
+      	//ceHi();                     // Start transmission
 
       	if ( whatToSend == 1) //remove packet if it was ack
       	{
@@ -184,7 +187,7 @@ void Nrf24l::readPacket(mirfPacket* paket)
 	//we have to temporarily disable timer0 interrupt because no one else could be able to touch
 	//the packet queue until we are finished
   	cli();
-    memcpy(paket, (void*)(&(rxQueue[rxPosBeg])), NRF_PAYLOAD_SIZE);
+    memcpy(paket, (const void*)&rxQueue[rxPosBeg], NRF_PAYLOAD_SIZE);
     inPacketReady--;
     rxPosBeg++;
     if (rxPosBeg == MAX_RX_PACKET_QUEUE) rxPosBeg = 0; //rxPos could wrap.. and we are going anti clockwise
@@ -209,7 +212,7 @@ uint8_t Nrf24l::sendPacket(mirfPacket* paket)
   paket->counter = packetCounter;
   paket->txAddr = devAddr;
 
-  memcpy((void *)&(txQueue[txPosEnd]), (const void *)paket, NRF_PAYLOAD_SIZE);
+  memcpy((void*)&txQueue[txPosEnd], paket, NRF_PAYLOAD_SIZE);
 
   txQueueSize++;
   txPosEnd++;
@@ -352,7 +355,7 @@ bool Nrf24l::dataReady()
 bool Nrf24l::rxFifoEmpty(){
 	uint8_t fifoStatus;
 
-	nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &fifoStatus, true, 1);
+	nrfSpiWrite((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &fifoStatus, true, 1);
 	//readRegister(FIFO_STATUS, &fifoStatus, sizeof(fifoStatus));
 
 	return (fifoStatus & _BV(RX_EMPTY));
@@ -361,7 +364,7 @@ bool Nrf24l::rxFifoEmpty(){
 void Nrf24l::getData(uint8_t * data) 
 // Reads payload bytes into data array
 {
-	nrfSpiWrite2(R_RX_PAYLOAD, data, true, NRF_PAYLOAD_SIZE); // Read payload
+	nrfSpiWrite(R_RX_PAYLOAD, data, true, NRF_PAYLOAD_SIZE); // Read payload
 
 	// NVI: per product spec, p 67, note c:
 	//  "The RX_DR IRQ is asserted by a new packet arrival event. The procedure
@@ -371,7 +374,9 @@ void Nrf24l::getData(uint8_t * data)
 	//  repeat from step 1)."
 	// So if we're going to clear RX_DR here, we need to check the RX FIFO
 	// in the dataReady() function
-	configRegister(STATUS, _BV(RX_DR));   // Reset status register
+
+	//maybe this is not necessary here
+	//configRegister(STATUS, _BV(RX_DR));   // Reset status register
 }
 
 void Nrf24l::configRegister(uint8_t reg, uint8_t value)
@@ -403,7 +408,7 @@ void Nrf24l::writeRegister(uint8_t reg, uint8_t * value, uint8_t len)
 bool Nrf24l::isSending() {
 	uint8_t status;
 	if(PTX){
-		nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &status, true, 1);
+		nrfSpiWrite((R_REGISTER | (REGISTER_MASK & FIFO_STATUS)), &status, true, 1);
 
 		/*
 		 *  if sending successful (TX_DS) or max retries exceded (MAX_RT).
@@ -443,15 +448,18 @@ uint8_t Nrf24l::getCarrier(){
 	/* Initialize with NOP so we get the first byte read back. */
 	uint8_t rv = NOP_CMD;
 	nrfSpiWrite2((R_REGISTER | (REGISTER_MASK & CD)), &rv, true, 1);
-  //readRegister(CD, &rv, 1);
+	//readRegister(CD, &rv, 1);
 	return (rv & 1);
 }
 
 uint8_t Nrf24l::getStatus(){
 	/* Initialize with NOP so we get the first byte read back. */
 	uint8_t rv = NOP_CMD;
-	nrfSpiWrite((R_REGISTER | (REGISTER_MASK & STATUS)), &rv, true, 1);
-  //readRegister(STATUS, &rv, 1);
+	//nrfSpiWrite((R_REGISTER | (REGISTER_MASK & STATUS)), &rv, true, 1);
+	//readRegister(STATUS, &rv, 1);
+	csnLow();
+	rv = spi->transfer(rv);
+	csnHi();
 	return rv;
 }
 
